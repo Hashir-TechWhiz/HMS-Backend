@@ -2,6 +2,9 @@ import Booking from "../models/Booking.js";
 import Room from "../models/Room.js";
 import User from "../models/User.js";
 import mongoose from "mongoose";
+import transporter from "../config/nodemailer.js";
+import { bookingConfirmationEmailTemplate } from "../templates/bookingConfirmationEmailTemplate.js";
+import { bookingCancellationEmailTemplate } from "../templates/bookingCancellationEmailTemplate.js";
 
 class BookingService {
     /**
@@ -139,6 +142,39 @@ class BookingService {
             { path: "room", select: "roomNumber roomType pricePerNight images" },
         ]);
 
+        // Send booking confirmation email (non-blocking - should not fail booking logic)
+        try {
+            const checkInFormatted = checkIn.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const checkOutFormatted = checkOut.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            const mailOptions = {
+                from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+                to: newBooking.guest.email,
+                subject: "Booking Confirmation - Hotel Management System",
+                html: bookingConfirmationEmailTemplate(
+                    newBooking.guest.name,
+                    newBooking.room.roomNumber,
+                    newBooking.room.roomType,
+                    checkInFormatted,
+                    checkOutFormatted,
+                    newBooking.status
+                ),
+            };
+
+            await transporter.sendMail(mailOptions);
+        } catch (emailError) {
+            // Log email error but don't fail the booking
+            console.error("Failed to send booking confirmation email:", emailError.message);
+        }
+
         return newBooking.toJSON();
     }
 
@@ -275,6 +311,38 @@ class BookingService {
         // Update booking status to cancelled
         booking.status = "cancelled";
         await booking.save();
+
+        // Send booking cancellation email (non-blocking - should not fail cancellation logic)
+        try {
+            const checkInFormatted = booking.checkInDate.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const checkOutFormatted = booking.checkOutDate.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            const mailOptions = {
+                from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+                to: booking.guest.email,
+                subject: "Booking Cancellation Confirmation - Hotel Management System",
+                html: bookingCancellationEmailTemplate(
+                    booking.guest.name,
+                    booking.room.roomNumber,
+                    booking.room.roomType,
+                    checkInFormatted,
+                    checkOutFormatted
+                ),
+            };
+
+            await transporter.sendMail(mailOptions);
+        } catch (emailError) {
+            // Log email error but don't fail the cancellation
+            console.error("Failed to send booking cancellation email:", emailError.message);
+        }
 
         return booking.toJSON();
     }

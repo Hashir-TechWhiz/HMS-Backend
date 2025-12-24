@@ -16,6 +16,7 @@ import connectDB from "../config/db.js";
 import User from "../models/User.js";
 import Room from "../models/Room.js";
 import Booking from "../models/Booking.js";
+import bookingService from "../services/bookingService.js";
 
 // Safety check
 if (process.env.NODE_ENV !== "test") {
@@ -26,7 +27,7 @@ if (process.env.NODE_ENV !== "test") {
 const testData = {
     guest: {
         name: "Test Guest",
-        email: "testguest@example.com",
+        email: "hashirmohamed04@gmail.com",
         password: "password123",
         role: "guest",
     },
@@ -105,25 +106,37 @@ async function testBookingCreation(guest, receptionist, room) {
     const checkOutDate = new Date(checkInDate);
     checkOutDate.setDate(checkInDate.getDate() + 2);
 
-    const booking1 = new Booking({
-        guest: guest._id,
-        room: room._id,
-        checkInDate,
-        checkOutDate,
-        status: "pending",
-    });
-    await booking1.save();
-    console.log("   ✅ Booking 1 created (Guest booking)");
+    // Create booking using service layer (triggers email)
+    const currentUser = {
+        id: guest._id.toString(),
+        email: guest.email,
+        role: guest.role,
+    };
 
-    try {
-        const overlappingBooking = new Booking({
-            guest: guest._id,
-            room: room._id,
-            checkInDate: new Date(checkInDate.getTime() + 86400000),
-            checkOutDate: new Date(checkOutDate.getTime()),
+    const booking1Data = await bookingService.createBooking(
+        {
+            roomId: room._id,
+            checkInDate,
+            checkOutDate,
             status: "pending",
-        });
-        await overlappingBooking.save();
+        },
+        currentUser
+    );
+
+    console.log("   ✅ Booking 1 created (Guest booking)");
+    console.log(`   📧 Confirmation email sent to: ${guest.email}`);
+
+    // Test overlap detection
+    try {
+        await bookingService.createBooking(
+            {
+                roomId: room._id,
+                checkInDate: new Date(checkInDate.getTime() + 86400000),
+                checkOutDate: new Date(checkOutDate.getTime()),
+                status: "pending",
+            },
+            currentUser
+        );
         console.log("   ❌ Overlap detection failed");
     } catch {
         console.log("   ✅ Overlap detection working");
@@ -135,15 +148,21 @@ async function testBookingCreation(guest, receptionist, room) {
     const futureCheckOut = new Date(futureCheckIn);
     futureCheckOut.setDate(futureCheckIn.getDate() + 3);
 
-    const booking2 = new Booking({
-        guest: guest._id,
-        room: room._id,
-        checkInDate: futureCheckIn,
-        checkOutDate: futureCheckOut,
-        status: "confirmed",
-    });
-    await booking2.save();
+    const booking2Data = await bookingService.createBooking(
+        {
+            roomId: room._id,
+            checkInDate: futureCheckIn,
+            checkOutDate: futureCheckOut,
+            status: "confirmed",
+        },
+        currentUser
+    );
     console.log("   ✅ Booking 2 created (Non-overlapping)");
+    console.log(`   📧 Confirmation email sent to: ${guest.email}`);
+
+    // Get booking objects for later use
+    const booking1 = await Booking.findById(booking1Data._id);
+    const booking2 = await Booking.findById(booking2Data._id);
 
     return { booking1, booking2 };
 }
@@ -155,12 +174,19 @@ async function testBookingRetrieval(guest) {
     console.log(`   ✅ Retrieved ${guestBookings.length} bookings for guest`);
 }
 
-async function testBookingCancellation(booking) {
+async function testBookingCancellation(booking, guest) {
     console.log("\n❌ Testing Booking Cancellation...");
 
-    booking.status = "cancelled";
-    await booking.save();
+    // Cancel booking using service layer (triggers email)
+    const currentUser = {
+        id: guest._id.toString(),
+        email: guest.email,
+        role: guest.role,
+    };
+
+    await bookingService.cancelBooking(booking._id.toString(), currentUser);
     console.log("   ✅ Booking cancelled");
+    console.log(`   📧 Cancellation email sent to: ${guest.email}`);
 }
 
 async function displaySummary() {
@@ -190,7 +216,7 @@ async function runTests() {
         );
 
         await testBookingRetrieval(guest);
-        await testBookingCancellation(booking1);
+        await testBookingCancellation(booking1, guest);
         await displaySummary();
     } catch (error) {
         console.error("\n❌ TEST FAILED:", error.message);
