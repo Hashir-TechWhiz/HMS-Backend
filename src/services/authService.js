@@ -1,5 +1,8 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import User from "../models/User.js";
+import transporter from "../config/nodemailer.js";
+import { resetOtpEmailTemplate } from "../templates/resetOtpEmailTemplate.js";
 
 class AuthService {
     /**
@@ -197,6 +200,189 @@ class AuthService {
         }
 
         return user.toJSON();
+    }
+
+    /**
+     * Generate a secure 6-digit OTP
+     * @returns {string} 6-digit OTP
+     */
+    generateOTP() {
+        // Generate a random 6-digit number
+        return crypto.randomInt(100000, 999999).toString();
+    }
+
+    /**
+     * Send OTP email to user
+     * @param {string} email - User's email
+     * @param {string} otp - OTP code
+     * @param {string} name - User's name
+     */
+    async sendOTPEmail(email, otp, name) {
+        const mailOptions = {
+            from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+            to: email,
+            subject: "Password Reset OTP",
+            html: resetOtpEmailTemplate(name, otp),
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+        } catch (error) {
+            throw new Error("Failed to send OTP email");
+        }
+    }
+
+    /**
+     * Initiate forgot password process
+     * @param {string} email - User's email
+     * @returns {Object} Success message
+     */
+    async forgotPassword(email) {
+        if (!email) {
+            throw new Error("Email is required");
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email: email.toLowerCase() });
+
+        // Always return success message for security (don't reveal if email exists)
+        // But only send OTP if user exists and is active
+        if (user && user.isActive) {
+            // Generate OTP
+            const otp = this.generateOTP();
+
+            // Set OTP expiry (15 minutes from now)
+            const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+            // Save OTP and expiry to user
+            user.resetOtp = otp;
+            user.resetOtpExpireAt = otpExpiry;
+            await user.save();
+
+            // Send OTP email
+            try {
+                await this.sendOTPEmail(user.email, otp, user.name);
+            } catch (error) {
+                // Clear OTP if email fails
+                user.resetOtp = null;
+                user.resetOtpExpireAt = null;
+                await user.save();
+                throw new Error("Failed to send OTP email. Please try again later.");
+            }
+        }
+
+        // Always return the same message for security
+        return {
+            message: "If an account exists with this email, an OTP has been sent.",
+        };
+    }
+
+    /**
+     * Verify reset OTP
+     * @param {string} email - User's email
+     * @param {string} otp - OTP to verify
+     * @returns {Object} Success message
+     */
+    async verifyResetOtp(email, otp) {
+        if (!email || !otp) {
+            throw new Error("Email and OTP are required");
+        }
+
+        // Find user
+        const user = await User.findOne({ email: email.toLowerCase() });
+
+        if (!user) {
+            throw new Error("Invalid OTP or email");
+        }
+
+        // Check if user is active
+        if (!user.isActive) {
+            throw new Error("Account is deactivated");
+        }
+
+        // Check if OTP exists
+        if (!user.resetOtp || !user.resetOtpExpireAt) {
+            throw new Error("Invalid OTP or email");
+        }
+
+        // Check if OTP matches
+        if (user.resetOtp !== otp) {
+            throw new Error("Invalid OTP or email");
+        }
+
+        // Check if OTP is expired
+        if (new Date() > user.resetOtpExpireAt) {
+            // Clear expired OTP
+            user.resetOtp = null;
+            user.resetOtpExpireAt = null;
+            await user.save();
+            throw new Error("OTP has expired. Please request a new one.");
+        }
+
+        return {
+            message: "OTP verified successfully. You may now reset your password.",
+        };
+    }
+
+    /**
+     * Reset password using OTP
+     * @param {string} email - User's email
+     * @param {string} otp - OTP
+     * @param {string} newPassword - New password
+     * @returns {Object} Success message
+     */
+    async resetPassword(email, otp, newPassword) {
+        if (!email || !otp || !newPassword) {
+            throw new Error("Email, OTP, and new password are required");
+        }
+
+        // Validate password length
+        if (newPassword.length < 6) {
+            throw new Error("Password must be at least 6 characters long");
+        }
+
+        // Find user
+        const user = await User.findOne({ email: email.toLowerCase() });
+
+        if (!user) {
+            throw new Error("Invalid OTP or email");
+        }
+
+        // Check if user is active
+        if (!user.isActive) {
+            throw new Error("Account is deactivated");
+        }
+
+        // Check if OTP exists
+        if (!user.resetOtp || !user.resetOtpExpireAt) {
+            throw new Error("Invalid OTP or email");
+        }
+
+        // Check if OTP matches
+        if (user.resetOtp !== otp) {
+            throw new Error("Invalid OTP or email");
+        }
+
+        // Check if OTP is expired
+        if (new Date() > user.resetOtpExpireAt) {
+            // Clear expired OTP
+            user.resetOtp = null;
+            user.resetOtpExpireAt = null;
+            await user.save();
+            throw new Error("OTP has expired. Please request a new one.");
+        }
+
+        // Update password and clear OTP fields
+        user.password = newPassword;
+        user.resetOtp = null;
+        user.resetOtpExpireAt = null;
+
+        // The pre-save hook will hash the password automatically
+        await user.save();
+
+        return {
+            message: "Password reset successfully. You can now login with your new password.",
+        };
     }
 }
 

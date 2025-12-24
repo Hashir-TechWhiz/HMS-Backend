@@ -136,6 +136,66 @@ class AuthController {
             message: "Logout successful",
         });
     }
+
+    /**
+     * Forgot Password - Request OTP
+     * POST /api/auth/forgot-password
+     * Sends OTP to user's email
+     */
+    async forgotPassword(req, res, next) {
+        try {
+            const { email } = req.body;
+
+            const result = await authService.forgotPassword(email);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Verify Reset OTP
+     * POST /api/auth/verify-reset-otp
+     * Verifies the OTP before password reset
+     */
+    async verifyResetOtp(req, res, next) {
+        try {
+            const { email, otp } = req.body;
+
+            const result = await authService.verifyResetOtp(email, otp);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Reset Password
+     * POST /api/auth/reset-password
+     * Resets password using OTP
+     */
+    async resetPassword(req, res, next) {
+        try {
+            const { email, otp, newPassword } = req.body;
+
+            const result = await authService.resetPassword(email, otp, newPassword);
+
+            res.status(200).json({
+                success: true,
+                message: result.message,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AuthController();

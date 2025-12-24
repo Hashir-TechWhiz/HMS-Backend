@@ -27,6 +27,27 @@ router.post("/login", authController.login);
 router.post("/logout", authController.logout);
 
 /**
+ * @route   POST /api/auth/forgot-password
+ * @desc    Request password reset OTP via email
+ * @access  Public
+ */
+router.post("/forgot-password", authController.forgotPassword);
+
+/**
+ * @route   POST /api/auth/verify-reset-otp
+ * @desc    Verify the password reset OTP
+ * @access  Public
+ */
+router.post("/verify-reset-otp", authController.verifyResetOtp);
+
+/**
+ * @route   POST /api/auth/reset-password
+ * @desc    Reset password using OTP
+ * @access  Public
+ */
+router.post("/reset-password", authController.resetPassword);
+
+/**
  * @route   POST /api/auth/users
  * @desc    Create new user (Admin only)
  * @access  Private/Admin
