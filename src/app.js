@@ -6,6 +6,7 @@ import roomRoutes from "./routes/roomRoutes.js";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import serviceRequestRoutes from "./routes/serviceRequestRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -32,6 +33,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/service-requests", serviceRequestRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/admin/users", adminUserRoutes);
 
 // 404 handler for unknown routes
 app.use((req, res) => {
