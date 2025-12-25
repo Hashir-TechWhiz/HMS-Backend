@@ -128,6 +128,27 @@ class BookingController {
             next(error);
         }
     }
+
+    /**
+     * Confirm a booking
+     * PATCH /api/bookings/:id/confirm
+     * Receptionist and Admin only
+     */
+    async confirmBooking(req, res, next) {
+        try {
+            const currentUser = req.user; // Set by authenticate middleware
+
+            const booking = await bookingService.confirmBooking(req.params.id, currentUser);
+
+            res.status(200).json({
+                success: true,
+                message: "Booking confirmed successfully",
+                data: booking,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new BookingController();

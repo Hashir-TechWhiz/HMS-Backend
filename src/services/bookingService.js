@@ -482,6 +482,98 @@ class BookingService {
             },
         };
     }
+
+    /**
+     * Confirm a booking
+     * @param {string} bookingId - Booking ID
+     * @param {Object} currentUser - Current user making the request
+     * @returns {Object} Updated booking
+     */
+    async confirmBooking(bookingId, currentUser) {
+        // Only receptionist and admin can confirm bookings
+        if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Unauthorized. Only receptionists and admins can confirm bookings");
+        }
+
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+
+        const booking = await Booking.findById(bookingId)
+            .populate("guest", "name email role")
+            .populate("room", "roomNumber roomType pricePerNight images");
+
+        if (!booking) {
+            throw new Error("Booking not found");
+        }
+
+        // Check if booking is already confirmed
+        if (booking.status === "confirmed") {
+            throw new Error("Booking is already confirmed");
+        }
+
+        // Check if booking is cancelled
+        if (booking.status === "cancelled") {
+            throw new Error("Cannot confirm a cancelled booking");
+        }
+
+        // Update booking status to confirmed
+        booking.status = "confirmed";
+        await booking.save();
+
+        // Send booking confirmation email (non-blocking - should not fail confirmation logic)
+        try {
+            const checkInFormatted = booking.checkInDate.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            const checkOutFormatted = booking.checkOutDate.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            // Determine recipient email and name
+            let recipientEmail = null;
+            let recipientName = null;
+
+            if (booking.guest) {
+                // Guest booking - use guest's email
+                recipientEmail = booking.guest.email;
+                recipientName = booking.guest.name;
+            } else if (booking.customerDetails && booking.customerDetails.email) {
+                // Walk-in booking with email
+                recipientEmail = booking.customerDetails.email;
+                recipientName = booking.customerDetails.name;
+            }
+
+            // Only send email if we have an email address
+            if (recipientEmail) {
+                const mailOptions = {
+                    from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+                    to: recipientEmail,
+                    subject: "Booking Confirmation - Hotel Management System",
+                    html: bookingConfirmationEmailTemplate(
+                        recipientName,
+                        booking.room.roomNumber,
+                        booking.room.roomType,
+                        checkInFormatted,
+                        checkOutFormatted,
+                        "confirmed"
+                    ),
+                };
+
+                await transporter.sendMail(mailOptions);
+            }
+        } catch (emailError) {
+            // Log email error but don't fail the confirmation
+            console.error("Failed to send booking confirmation email:", emailError.message);
+        }
+
+        return booking.toJSON();
+    }
 }
 
 export default new BookingService();

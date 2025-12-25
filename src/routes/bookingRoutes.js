@@ -72,5 +72,17 @@ router.patch(
     bookingController.cancelBooking
 );
 
+/**
+ * @route   PATCH /api/bookings/:id/confirm
+ * @desc    Confirm a booking
+ * @access  Private (Receptionist and Admin only)
+ */
+router.patch(
+    "/:id/confirm",
+    authenticate,
+    authorize("receptionist", "admin"),
+    bookingController.confirmBooking
+);
+
 export default router;
 
