@@ -26,6 +26,10 @@ class ServiceRequestService {
 
         // Guest can only create service requests for their own bookings
         if (currentUser.role === "guest") {
+            // Walk-in bookings don't have a guest field, so they can't have service requests
+            if (!booking.guest) {
+                throw new Error("Service requests can only be created for guest bookings");
+            }
             if (booking.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only create service requests for your own bookings");
             }

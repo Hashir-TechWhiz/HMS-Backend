@@ -5,15 +5,35 @@ const bookingSchema = new mongoose.Schema(
         guest: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: [true, "Guest is required"],
+            required: false,
             validate: {
                 validator: async function (guestId) {
+                    if (!guestId) return true;
                     const User = mongoose.model("User");
                     const user = await User.findById(guestId);
                     return user && user.role === "guest";
                 },
                 message: "Guest must be a user with role 'guest'",
             },
+        },
+        customerDetails: {
+            name: {
+                type: String,
+                required: false,
+            },
+            phone: {
+                type: String,
+                required: false,
+            },
+            email: {
+                type: String,
+                required: false,
+            },
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: false,
         },
         room: {
             type: mongoose.Schema.Types.ObjectId,
@@ -25,7 +45,6 @@ const bookingSchema = new mongoose.Schema(
             required: [true, "Check-in date is required"],
             validate: {
                 validator: function (value) {
-                    // Check-in date should not be in the past
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     return value >= today;
@@ -38,7 +57,6 @@ const bookingSchema = new mongoose.Schema(
             required: [true, "Check-out date is required"],
             validate: {
                 validator: function (value) {
-                    // Check-out date should be after check-in date
                     return value > this.checkInDate;
                 },
                 message: "Check-out date must be after check-in date",
@@ -63,6 +81,7 @@ bookingSchema.index({ guest: 1 });
 bookingSchema.index({ room: 1 });
 bookingSchema.index({ status: 1 });
 bookingSchema.index({ checkInDate: 1, checkOutDate: 1 });
+bookingSchema.index({ createdBy: 1 });
 
 // Compound index for checking overlapping bookings
 bookingSchema.index({ room: 1, checkInDate: 1, checkOutDate: 1, status: 1 });

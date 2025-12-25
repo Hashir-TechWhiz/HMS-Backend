@@ -54,7 +54,7 @@ class BookingService {
      * @returns {Object} Created booking
      */
     async createBooking(bookingData, currentUser) {
-        const { guestId, roomId, checkInDate, checkOutDate, status } = bookingData;
+        const { guestId, roomId, checkInDate, checkOutDate, status, customerDetails } = bookingData;
 
         // Validate required fields
         if (!roomId || !checkInDate || !checkOutDate) {
@@ -88,8 +88,10 @@ class BookingService {
             throw new Error("Room not found");
         }
 
-        // Determine the guest
-        let finalGuestId;
+        // Determine booking type and validate accordingly
+        let finalGuestId = null;
+        let finalCustomerDetails = null;
+        let finalCreatedBy = null;
 
         if (currentUser.role === "guest") {
             // Guests can only book for themselves
@@ -99,22 +101,47 @@ class BookingService {
             if (guestId && guestId !== currentUser.id) {
                 throw new Error("Guests can only create bookings for themselves");
             }
+
+            // Guests cannot provide customerDetails (they book for themselves)
+            if (customerDetails) {
+                throw new Error("Guests cannot provide customer details. Use guest booking flow.");
+            }
         } else if (currentUser.role === "receptionist" || currentUser.role === "admin") {
-            // Receptionist and admin can book on behalf of guests
-            if (!guestId) {
-                throw new Error("Guest ID is required when booking on behalf of a guest");
+            // Receptionist and admin can book on behalf of guests OR create walk-in bookings
+            if (guestId) {
+                // Booking for existing guest user
+                // Validate that the guest exists and has role "guest"
+                const guest = await User.findById(guestId);
+                if (!guest) {
+                    throw new Error("Guest not found");
+                }
+                if (guest.role !== "guest") {
+                    throw new Error("Only users with role 'guest' can be assigned to bookings");
+                }
+
+                finalGuestId = guestId;
+
+                // Cannot have both guestId and customerDetails
+                if (customerDetails) {
+                    throw new Error("Cannot provide both guestId and customerDetails");
+                }
+            } else if (customerDetails) {
+                // Walk-in booking - validate customerDetails
+                if (!customerDetails.name || !customerDetails.phone) {
+                    throw new Error("Customer name and phone are required for walk-in bookings");
+                }
+
+                finalCustomerDetails = {
+                    name: customerDetails.name,
+                    phone: customerDetails.phone,
+                    email: customerDetails.email || null,
+                };
+            } else {
+                throw new Error("Either guestId or customerDetails must be provided for staff bookings");
             }
 
-            // Validate that the guest exists and has role "guest"
-            const guest = await User.findById(guestId);
-            if (!guest) {
-                throw new Error("Guest not found");
-            }
-            if (guest.role !== "guest") {
-                throw new Error("Only users with role 'guest' can be assigned to bookings");
-            }
-
-            finalGuestId = guestId;
+            // Track who created the booking
+            finalCreatedBy = currentUser.id;
         } else {
             throw new Error("Unauthorized to create bookings");
         }
@@ -126,21 +153,42 @@ class BookingService {
         }
 
         // Create new booking
-        const newBooking = new Booking({
+        const bookingPayload = {
             guest: finalGuestId,
             room: roomId,
             checkInDate: checkIn,
             checkOutDate: checkOut,
             status: status || "pending",
-        });
+        };
+
+        // Only include customerDetails if it's not null
+        if (finalCustomerDetails) {
+            bookingPayload.customerDetails = finalCustomerDetails;
+        }
+
+        // Only include createdBy if it's not null
+        if (finalCreatedBy) {
+            bookingPayload.createdBy = finalCreatedBy;
+        }
+
+        const newBooking = new Booking(bookingPayload);
 
         await newBooking.save();
 
-        // Populate guest and room details
-        await newBooking.populate([
-            { path: "guest", select: "name email role" },
+        // Populate guest, createdBy, and room details (only populate if they exist)
+        const populatePaths = [
             { path: "room", select: "roomNumber roomType pricePerNight images" },
-        ]);
+        ];
+
+        if (finalGuestId) {
+            populatePaths.push({ path: "guest", select: "name email role" });
+        }
+
+        if (finalCreatedBy) {
+            populatePaths.push({ path: "createdBy", select: "name email role" });
+        }
+
+        await newBooking.populate(populatePaths);
 
         // Send booking confirmation email (non-blocking - should not fail booking logic)
         try {
@@ -155,21 +203,38 @@ class BookingService {
                 day: 'numeric'
             });
 
-            const mailOptions = {
-                from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
-                to: newBooking.guest.email,
-                subject: "Booking Confirmation - Hotel Management System",
-                html: bookingConfirmationEmailTemplate(
-                    newBooking.guest.name,
-                    newBooking.room.roomNumber,
-                    newBooking.room.roomType,
-                    checkInFormatted,
-                    checkOutFormatted,
-                    newBooking.status
-                ),
-            };
+            // Determine recipient email and name
+            let recipientEmail = null;
+            let recipientName = null;
 
-            await transporter.sendMail(mailOptions);
+            if (finalGuestId && newBooking.guest) {
+                // Guest booking - use guest's email
+                recipientEmail = newBooking.guest.email;
+                recipientName = newBooking.guest.name;
+            } else if (finalCustomerDetails && finalCustomerDetails.email) {
+                // Walk-in booking with email
+                recipientEmail = finalCustomerDetails.email;
+                recipientName = finalCustomerDetails.name;
+            }
+
+            // Only send email if we have an email address
+            if (recipientEmail) {
+                const mailOptions = {
+                    from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+                    to: recipientEmail,
+                    subject: "Booking Confirmation - Hotel Management System",
+                    html: bookingConfirmationEmailTemplate(
+                        recipientName,
+                        newBooking.room.roomNumber,
+                        newBooking.room.roomType,
+                        checkInFormatted,
+                        checkOutFormatted,
+                        newBooking.status
+                    ),
+                };
+
+                await transporter.sendMail(mailOptions);
+            }
         } catch (emailError) {
             // Log email error but don't fail the booking
             console.error("Failed to send booking confirmation email:", emailError.message);
@@ -190,17 +255,19 @@ class BookingService {
 
         // Role-based filtering
         if (currentUser.role === "guest") {
-            // Guests can only see their own bookings
+            // Guests can only see their own bookings (guest bookings only)
             query.guest = currentUser.id;
         } else if (currentUser.role === "receptionist" || currentUser.role === "admin") {
-            // Receptionist and admin can see all bookings
+            // Receptionist and admin can see all bookings (both guest and walk-in)
             // Apply optional filters
             if (filters.guestId) {
+                // Filter by guest ID (only guest bookings)
                 query.guest = filters.guestId;
             }
             if (filters.roomId) {
                 query.room = filters.roomId;
             }
+            // Note: Walk-in bookings will be included automatically (no guest filter)
         } else {
             throw new Error("Unauthorized to view bookings");
         }
@@ -221,6 +288,7 @@ class BookingService {
         // Get paginated bookings
         const bookings = await Booking.find(query)
             .populate("guest", "name email role")
+            .populate("createdBy", "name email role")
             .populate("room", "roomNumber roomType pricePerNight images")
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -254,6 +322,7 @@ class BookingService {
 
         const booking = await Booking.findById(bookingId)
             .populate("guest", "name email role")
+            .populate("createdBy", "name email role")
             .populate("room", "roomNumber roomType pricePerNight images");
 
         if (!booking) {
@@ -262,13 +331,17 @@ class BookingService {
 
         // Role-based access control
         if (currentUser.role === "guest") {
-            // Guests can only view their own bookings
+            // Guests can only view their own bookings (must have guest field)
+            if (!booking.guest) {
+                throw new Error("Access denied. You can only view your own bookings");
+            }
             if (booking.guest._id.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view your own bookings");
             }
         } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
             throw new Error("Unauthorized to view bookings");
         }
+        // Receptionist and admin can view all bookings (both guest and walk-in)
 
         return booking.toJSON();
     }
@@ -300,13 +373,17 @@ class BookingService {
 
         // Role-based authorization
         if (currentUser.role === "guest") {
-            // Guests can only cancel their own bookings
+            // Guests can only cancel their own bookings (must have guest field)
+            if (!booking.guest) {
+                throw new Error("Access denied. You can only cancel your own bookings");
+            }
             if (booking.guest._id.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only cancel your own bookings");
             }
         } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
             throw new Error("Unauthorized to cancel bookings");
         }
+        // Receptionist and admin can cancel any booking (both guest and walk-in)
 
         // Update booking status to cancelled
         booking.status = "cancelled";
@@ -325,20 +402,37 @@ class BookingService {
                 day: 'numeric'
             });
 
-            const mailOptions = {
-                from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
-                to: booking.guest.email,
-                subject: "Booking Cancellation Confirmation - Hotel Management System",
-                html: bookingCancellationEmailTemplate(
-                    booking.guest.name,
-                    booking.room.roomNumber,
-                    booking.room.roomType,
-                    checkInFormatted,
-                    checkOutFormatted
-                ),
-            };
+            // Determine recipient email and name
+            let recipientEmail = null;
+            let recipientName = null;
 
-            await transporter.sendMail(mailOptions);
+            if (booking.guest) {
+                // Guest booking - use guest's email
+                recipientEmail = booking.guest.email;
+                recipientName = booking.guest.name;
+            } else if (booking.customerDetails && booking.customerDetails.email) {
+                // Walk-in booking with email
+                recipientEmail = booking.customerDetails.email;
+                recipientName = booking.customerDetails.name;
+            }
+
+            // Only send email if we have an email address
+            if (recipientEmail) {
+                const mailOptions = {
+                    from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+                    to: recipientEmail,
+                    subject: "Booking Cancellation Confirmation - Hotel Management System",
+                    html: bookingCancellationEmailTemplate(
+                        recipientName,
+                        booking.room.roomNumber,
+                        booking.room.roomType,
+                        checkInFormatted,
+                        checkOutFormatted
+                    ),
+                };
+
+                await transporter.sendMail(mailOptions);
+            }
         } catch (emailError) {
             // Log email error but don't fail the cancellation
             console.error("Failed to send booking cancellation email:", emailError.message);
