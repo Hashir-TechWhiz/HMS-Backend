@@ -245,7 +245,7 @@ class BookingService {
 
     /**
      * Get all bookings with optional filtering and pagination
-     * @param {Object} filters - Optional filters (status, guestId, roomId)
+     * @param {Object} filters - Optional filters (status, guestId, roomId, from, to)
      * @param {Object} pagination - Pagination options (page, limit)
      * @param {Object} currentUser - Current user making the request
      * @returns {Object} Paginated bookings with metadata
@@ -275,6 +275,27 @@ class BookingService {
         // Apply status filter
         if (filters.status) {
             query.status = filters.status;
+        }
+
+        // Apply date range filter (filter by createdAt)
+        if (filters.from || filters.to) {
+            query.createdAt = {};
+            if (filters.from) {
+                const fromDate = new Date(filters.from);
+                if (!isNaN(fromDate.getTime())) {
+                    query.createdAt.$gte = fromDate;
+                }
+            }
+            if (filters.to) {
+                const toDate = new Date(filters.to);
+                if (!isNaN(toDate.getTime())) {
+                    query.createdAt.$lte = toDate;
+                }
+            }
+            // If both dates are invalid, remove the createdAt filter
+            if (Object.keys(query.createdAt).length === 0) {
+                delete query.createdAt;
+            }
         }
 
         // Pagination
@@ -444,10 +465,11 @@ class BookingService {
     /**
      * Get bookings for the current logged-in user (guest)
      * @param {Object} currentUser - Current user making the request
+     * @param {Object} filters - Optional filters (from, to)
      * @param {Object} pagination - Pagination options (page, limit)
      * @returns {Object} Paginated bookings
      */
-    async getMyBookings(currentUser, pagination = {}) {
+    async getMyBookings(currentUser, filters = {}, pagination = {}) {
         if (currentUser.role !== "guest") {
             throw new Error("This endpoint is only for guests. Use getAllBookings for staff.");
         }
@@ -458,6 +480,27 @@ class BookingService {
         const skip = (page - 1) * limit;
 
         const query = { guest: currentUser.id };
+
+        // Apply date range filter (filter by createdAt)
+        if (filters.from || filters.to) {
+            query.createdAt = {};
+            if (filters.from) {
+                const fromDate = new Date(filters.from);
+                if (!isNaN(fromDate.getTime())) {
+                    query.createdAt.$gte = fromDate;
+                }
+            }
+            if (filters.to) {
+                const toDate = new Date(filters.to);
+                if (!isNaN(toDate.getTime())) {
+                    query.createdAt.$lte = toDate;
+                }
+            }
+            // If both dates are invalid, remove the createdAt filter
+            if (Object.keys(query.createdAt).length === 0) {
+                delete query.createdAt;
+            }
+        }
 
         // Get total count for pagination metadata
         const totalBookings = await Booking.countDocuments(query);

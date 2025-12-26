@@ -28,7 +28,7 @@ class BookingController {
      * GET /api/bookings
      * Authenticated users only
      * Guests see only their bookings, receptionist/admin see all
-     * Query params: status, guestId, roomId, page, limit
+     * Query params: status, guestId, roomId, from, to, page, limit
      */
     async getAllBookings(req, res, next) {
         try {
@@ -38,6 +38,8 @@ class BookingController {
                 status: req.query.status,
                 guestId: req.query.guestId,
                 roomId: req.query.roomId,
+                from: req.query.from,
+                to: req.query.to,
             };
 
             const pagination = {
@@ -62,17 +64,23 @@ class BookingController {
      * Get bookings for the current logged-in user (guest)
      * GET /api/bookings/my-bookings
      * Guest users only
+     * Query params: from, to, page, limit
      */
     async getMyBookings(req, res, next) {
         try {
             const currentUser = req.user; // Set by authenticate middleware
+
+            const filters = {
+                from: req.query.from,
+                to: req.query.to,
+            };
 
             const pagination = {
                 page: req.query.page,
                 limit: req.query.limit,
             };
 
-            const result = await bookingService.getMyBookings(currentUser, pagination);
+            const result = await bookingService.getMyBookings(currentUser, filters, pagination);
 
             res.status(200).json({
                 success: true,

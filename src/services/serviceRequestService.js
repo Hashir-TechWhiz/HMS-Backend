@@ -77,10 +77,11 @@ class ServiceRequestService {
     /**
      * Get service requests for the logged-in guest
      * @param {Object} currentUser - Current user making the request
+     * @param {Object} filters - Optional filters (from, to)
      * @param {Object} pagination - Pagination options
      * @returns {Object} Paginated service requests
      */
-    async getMyServiceRequests(currentUser, pagination = {}) {
+    async getMyServiceRequests(currentUser, filters = {}, pagination = {}) {
         if (currentUser.role !== "guest") {
             throw new Error("This endpoint is only for guests");
         }
@@ -91,6 +92,27 @@ class ServiceRequestService {
         const skip = (page - 1) * limit;
 
         const query = { requestedBy: currentUser.id };
+
+        // Apply date range filter (filter by createdAt)
+        if (filters.from || filters.to) {
+            query.createdAt = {};
+            if (filters.from) {
+                const fromDate = new Date(filters.from);
+                if (!isNaN(fromDate.getTime())) {
+                    query.createdAt.$gte = fromDate;
+                }
+            }
+            if (filters.to) {
+                const toDate = new Date(filters.to);
+                if (!isNaN(toDate.getTime())) {
+                    query.createdAt.$lte = toDate;
+                }
+            }
+            // If both dates are invalid, remove the createdAt filter
+            if (Object.keys(query.createdAt).length === 0) {
+                delete query.createdAt;
+            }
+        }
 
         // Get total count
         const totalRequests = await ServiceRequest.countDocuments(query);
@@ -119,7 +141,7 @@ class ServiceRequestService {
 
     /**
      * Get all service requests (admin/receptionist)
-     * @param {Object} filters - Optional filters
+     * @param {Object} filters - Optional filters (status, serviceType, assignedRole, roomId, from, to)
      * @param {Object} pagination - Pagination options
      * @param {Object} currentUser - Current user making the request
      * @returns {Object} Paginated service requests
@@ -144,6 +166,27 @@ class ServiceRequestService {
         }
         if (filters.roomId) {
             query.room = filters.roomId;
+        }
+
+        // Apply date range filter (filter by createdAt)
+        if (filters.from || filters.to) {
+            query.createdAt = {};
+            if (filters.from) {
+                const fromDate = new Date(filters.from);
+                if (!isNaN(fromDate.getTime())) {
+                    query.createdAt.$gte = fromDate;
+                }
+            }
+            if (filters.to) {
+                const toDate = new Date(filters.to);
+                if (!isNaN(toDate.getTime())) {
+                    query.createdAt.$lte = toDate;
+                }
+            }
+            // If both dates are invalid, remove the createdAt filter
+            if (Object.keys(query.createdAt).length === 0) {
+                delete query.createdAt;
+            }
         }
 
         // Pagination
@@ -179,10 +222,11 @@ class ServiceRequestService {
     /**
      * Get assigned service requests for housekeeping staff
      * @param {Object} currentUser - Current user making the request
+     * @param {Object} filters - Optional filters (from, to)
      * @param {Object} pagination - Pagination options
      * @returns {Object} Paginated service requests
      */
-    async getAssignedServiceRequests(currentUser, pagination = {}) {
+    async getAssignedServiceRequests(currentUser, filters = {}, pagination = {}) {
         // Only housekeeping staff can access this endpoint
         if (currentUser.role !== "housekeeping") {
             throw new Error("Access denied. Only housekeeping staff can access assigned tasks");
@@ -195,6 +239,27 @@ class ServiceRequestService {
 
         // Filter by assigned role matching the user's role
         const query = { assignedRole: "housekeeping" };
+
+        // Apply date range filter (filter by createdAt)
+        if (filters.from || filters.to) {
+            query.createdAt = {};
+            if (filters.from) {
+                const fromDate = new Date(filters.from);
+                if (!isNaN(fromDate.getTime())) {
+                    query.createdAt.$gte = fromDate;
+                }
+            }
+            if (filters.to) {
+                const toDate = new Date(filters.to);
+                if (!isNaN(toDate.getTime())) {
+                    query.createdAt.$lte = toDate;
+                }
+            }
+            // If both dates are invalid, remove the createdAt filter
+            if (Object.keys(query.createdAt).length === 0) {
+                delete query.createdAt;
+            }
+        }
 
         // Get total count
         const totalRequests = await ServiceRequest.countDocuments(query);

@@ -29,10 +29,16 @@ class ServiceRequestController {
      * Get service requests for the logged-in guest
      * GET /api/service-requests/my-requests
      * Guest only
+     * Query params: from, to, page, limit
      */
     async getMyServiceRequests(req, res, next) {
         try {
             const currentUser = req.user; // Set by authenticate middleware
+
+            const filters = {
+                from: req.query.from,
+                to: req.query.to,
+            };
 
             const pagination = {
                 page: req.query.page,
@@ -41,6 +47,7 @@ class ServiceRequestController {
 
             const result = await serviceRequestService.getMyServiceRequests(
                 currentUser,
+                filters,
                 pagination
             );
 
@@ -59,6 +66,7 @@ class ServiceRequestController {
      * Get all service requests
      * GET /api/service-requests
      * Admin and receptionist only
+     * Query params: status, serviceType, assignedRole, roomId, from, to, page, limit
      */
     async getAllServiceRequests(req, res, next) {
         try {
@@ -69,6 +77,8 @@ class ServiceRequestController {
                 serviceType: req.query.serviceType,
                 assignedRole: req.query.assignedRole,
                 roomId: req.query.roomId,
+                from: req.query.from,
+                to: req.query.to,
             };
 
             const pagination = {
@@ -97,10 +107,16 @@ class ServiceRequestController {
      * Get assigned service requests for housekeeping staff
      * GET /api/service-requests/assigned
      * Housekeeping only
+     * Query params: from, to, page, limit
      */
     async getAssignedServiceRequests(req, res, next) {
         try {
             const currentUser = req.user; // Set by authenticate middleware
+
+            const filters = {
+                from: req.query.from,
+                to: req.query.to,
+            };
 
             const pagination = {
                 page: req.query.page,
@@ -109,6 +125,7 @@ class ServiceRequestController {
 
             const result = await serviceRequestService.getAssignedServiceRequests(
                 currentUser,
+                filters,
                 pagination
             );
 
