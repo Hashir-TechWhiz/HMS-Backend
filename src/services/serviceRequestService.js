@@ -122,6 +122,7 @@ class ServiceRequestService {
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
             .populate("requestedBy", "name email role")
+            .populate("assignedTo", "name email role")
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -202,6 +203,7 @@ class ServiceRequestService {
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
             .populate("requestedBy", "name email role")
+            .populate("assignedTo", "name email role")
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -269,6 +271,7 @@ class ServiceRequestService {
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
             .populate("requestedBy", "name email role")
+            .populate("assignedTo", "name email role")
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -309,7 +312,8 @@ class ServiceRequestService {
         const serviceRequest = await ServiceRequest.findById(requestId)
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
-            .populate("requestedBy", "name email role");
+            .populate("requestedBy", "name email role")
+            .populate("assignedTo", "name email role");
 
         if (!serviceRequest) {
             throw new Error("Service request not found");
@@ -321,6 +325,22 @@ class ServiceRequestService {
             if (serviceRequest.assignedRole !== "housekeeping") {
                 throw new Error("Access denied. This task is not assigned to housekeeping");
             }
+
+            // When accepting a pending request, check if it's already assigned
+            if (newStatus === "in_progress" && serviceRequest.status === "pending") {
+                if (serviceRequest.assignedTo && serviceRequest.assignedTo._id.toString() !== currentUser.id) {
+                    throw new Error("This request has already been accepted by another housekeeping staff member");
+                }
+                // Assign to current user if not yet assigned
+                if (!serviceRequest.assignedTo) {
+                    serviceRequest.assignedTo = currentUser.id;
+                }
+            }
+
+            // Housekeeping can only update their own assigned requests (after acceptance)
+            if (serviceRequest.assignedTo && serviceRequest.assignedTo._id.toString() !== currentUser.id) {
+                throw new Error("Access denied. You can only update requests assigned to you");
+            }
         } else if (currentUser.role !== "admin") {
             // Only housekeeping and admin can update status
             throw new Error("Access denied. Only housekeeping staff and admin can update service request status");
@@ -329,6 +349,9 @@ class ServiceRequestService {
         // Update status
         serviceRequest.status = newStatus;
         await serviceRequest.save();
+
+        // Re-populate after save
+        await serviceRequest.populate("assignedTo", "name email role");
 
         return serviceRequest.toJSON();
     }
@@ -348,7 +371,8 @@ class ServiceRequestService {
         const serviceRequest = await ServiceRequest.findById(requestId)
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
-            .populate("requestedBy", "name email role");
+            .populate("requestedBy", "name email role")
+            .populate("assignedTo", "name email role");
 
         if (!serviceRequest) {
             throw new Error("Service request not found");
@@ -361,9 +385,13 @@ class ServiceRequestService {
                 throw new Error("Access denied. You can only view your own service requests");
             }
         } else if (currentUser.role === "housekeeping") {
-            // Housekeeping can only view requests assigned to them
+            // Housekeeping can only view requests assigned to them or unassigned ones
             if (serviceRequest.assignedRole !== "housekeeping") {
                 throw new Error("Access denied. This task is not assigned to housekeeping");
+            }
+            // Allow viewing if unassigned (pending) or assigned to current user
+            if (serviceRequest.assignedTo && serviceRequest.assignedTo._id.toString() !== currentUser.id) {
+                throw new Error("Access denied. This task is assigned to another housekeeping staff member");
             }
         } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
             throw new Error("Unauthorized to view service requests");

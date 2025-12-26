@@ -30,8 +30,9 @@ A comprehensive backend API for hotel management operations including room manag
 ### Housekeeping
 
 - Login to the system
-- View assigned service requests
-- Update service request status (pending, in-progress, completed)
+- View service requests assigned to housekeeping role
+- Accept and manage service requests
+- Update service request status (pending, in_progress, completed)
 - Update own profile
 
 ### Administrator
@@ -120,11 +121,19 @@ All routes require authentication
 
 **Query Parameters for GET /bookings**:
 
-- `status`: Filter by status (confirmed, checked-in, checked-out, cancelled)
+- `status`: Filter by status (pending, confirmed, cancelled)
 - `guestId`: Filter by guest user ID
 - `roomId`: Filter by room ID
 - `page`: Page number (default: 1)
 - `limit`: Items per page (default: 10)
+
+**Booking Status Lifecycle**:
+
+- `pending`: Booking created, awaiting confirmation
+- `confirmed`: Booking confirmed
+- `cancelled`: Booking cancelled
+
+Active bookings are determined by check-in and check-out dates. The system does not use explicit `checked-in` or `checked-out` status values.
 
 **Notes**:
 
@@ -143,7 +152,7 @@ All routes require authentication
 | ------ | ------------------------------- | ----------------------- | ---------------------------------------- |
 | POST   | `/service-requests`             | Guest                   | Create a service request for own booking |
 | GET    | `/service-requests/my-requests` | Guest                   | Get own service requests (paginated)     |
-| GET    | `/service-requests/assigned`    | Housekeeping            | Get assigned service requests            |
+| GET    | `/service-requests/assigned`    | Housekeeping            | Get service requests for housekeeping    |
 | GET    | `/service-requests`             | Admin, Receptionist     | Get all service requests (filtered)      |
 | GET    | `/service-requests/:id`         | All authenticated users | Get single service request details       |
 | PATCH  | `/service-requests/:id/status`  | Housekeeping, Admin     | Update service request status            |
@@ -151,21 +160,29 @@ All routes require authentication
 **Service Types**:
 
 - `housekeeping`: Room cleaning
-- `room-service`: Food/beverage delivery
-- `maintenance`: Repair requests
-- `concierge`: General assistance
+- `room_service`: Food/beverage delivery to room
+- `maintenance`: Repair and maintenance requests
 
 **Service Request Status**:
 
-- `pending`: Newly created, awaiting assignment
-- `in-progress`: Currently being handled
+- `pending`: Newly created, awaiting acceptance
+- `in_progress`: Currently being handled by staff
 - `completed`: Service completed
+
+**Service Request Assignment**:
+
+- `housekeeping` and `room_service` requests are assigned to housekeeping role
+- `maintenance` requests are assigned to maintenance role
+- Housekeeping staff can view all pending requests assigned to housekeeping
+- When a housekeeping staff member updates status to `in_progress`, the request is automatically assigned to them
+- Once assigned, only that specific staff member can update the request
+- Other housekeeping staff cannot view or modify requests assigned to others
 
 **Query Parameters for GET /service-requests**:
 
-- `status`: Filter by status (pending, in-progress, completed)
-- `serviceType`: Filter by type
-- `assignedRole`: Filter by assigned role (housekeeping)
+- `status`: Filter by status (pending, in_progress, completed)
+- `serviceType`: Filter by type (housekeeping, room_service, maintenance)
+- `assignedRole`: Filter by assigned role (housekeeping, maintenance)
 - `roomId`: Filter by room ID
 - `page`: Page number (default: 1)
 - `limit`: Items per page (default: 10)
@@ -173,8 +190,9 @@ All routes require authentication
 **Access Notes**:
 
 - Guests can only view their own service requests
-- Housekeeping staff can view requests assigned to them
-- Admin and Receptionist can view all service requests
+- Housekeeping staff can view unassigned requests and requests assigned to them specifically
+- Receptionists can view all service requests (read-only)
+- Admins have full visibility and can update any request
 
 ---
 
@@ -318,7 +336,7 @@ The system automatically sends email notifications for:
 - `checkInDate`: Date (required)
 - `checkOutDate`: Date (required)
 - `totalPrice`: Number
-- `status`: String (confirmed, checked-in, checked-out, cancelled)
+- `status`: String (pending, confirmed, cancelled)
 - `createdBy`: User ID reference
 - `createdAt`: Date
 - `updatedAt`: Date
@@ -326,11 +344,12 @@ The system automatically sends email notifications for:
 ### Service Request
 
 - `booking`: Booking ID reference
-- `guest`: User ID reference
+- `requestedBy`: User ID reference
 - `room`: Room ID reference
-- `serviceType`: String (housekeeping, room-service, maintenance, concierge)
-- `status`: String (pending, in-progress, completed)
-- `assignedRole`: String (housekeeping)
+- `serviceType`: String (housekeeping, room_service, maintenance)
+- `status`: String (pending, in_progress, completed)
+- `assignedRole`: String (housekeeping, maintenance)
+- `assignedTo`: User ID reference (staff member assigned to handle request)
 - `notes`: String
 - `createdAt`: Date
 - `updatedAt`: Date

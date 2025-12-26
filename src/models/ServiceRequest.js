@@ -63,7 +63,20 @@ const serviceRequestSchema = new mongoose.Schema(
                 values: ["housekeeping", "maintenance"],
                 message: "{VALUE} is not a valid assigned role",
             },
-            // Not required here because it's automatically set by pre-save hook
+        },
+        assignedTo: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+            validate: {
+                validator: async function (userId) {
+                    if (!userId) return true; 
+                    const User = mongoose.model("User");
+                    const user = await User.findById(userId);
+                    return user !== null;
+                },
+                message: "Assigned user does not exist",
+            },
         },
         notes: {
             type: String,
@@ -83,9 +96,13 @@ serviceRequestSchema.index({ requestedBy: 1 });
 serviceRequestSchema.index({ status: 1 });
 serviceRequestSchema.index({ assignedRole: 1 });
 serviceRequestSchema.index({ serviceType: 1 });
+serviceRequestSchema.index({ assignedTo: 1 });
 
 // Compound index for filtering by status and assigned role
 serviceRequestSchema.index({ status: 1, assignedRole: 1 });
+
+// Compound index for filtering by assignedTo and status
+serviceRequestSchema.index({ assignedTo: 1, status: 1 });
 
 // Pre-save hook to automatically assign role based on service type
 serviceRequestSchema.pre("save", function () {
