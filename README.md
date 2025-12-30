@@ -2,7 +2,7 @@
 
 A comprehensive backend API for hotel management operations including room management, bookings, service requests, and administrative functions with role-based access control.
 
----
+-----------------------------------------------
 
 ## User Roles & Permissions
 
