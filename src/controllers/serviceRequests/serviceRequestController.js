@@ -174,6 +174,39 @@ class ServiceRequestController {
     }
 
     /**
+     * Assign service request to a staff member
+     * PATCH /api/service-requests/:id/assign
+     * Admin only
+     */
+    async assignServiceRequest(req, res, next) {
+        try {
+            const currentUser = req.user; // Set by authenticate middleware
+            const { staffId } = req.body;
+
+            if (!staffId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Staff ID is required",
+                });
+            }
+
+            const serviceRequest = await serviceRequestService.assignServiceRequest(
+                req.params.id,
+                staffId,
+                currentUser
+            );
+
+            res.status(200).json({
+                success: true,
+                message: "Service request assigned successfully",
+                data: serviceRequest,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
      * Get a single service request by ID
      * GET /api/service-requests/:id
      * Access controlled by role

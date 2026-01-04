@@ -74,6 +74,19 @@ router.get(
 );
 
 /**
+ * @route   PATCH /api/service-requests/:id/assign
+ * @desc    Assign service request to a staff member
+ * @access  Private (Admin only)
+ * @body    { staffId }
+ */
+router.patch(
+    "/:id/assign",
+    authenticate,
+    authorize("admin"),
+    serviceRequestController.assignServiceRequest
+);
+
+/**
  * @route   PATCH /api/service-requests/:id/status
  * @desc    Update service request status
  * @access  Private (Housekeeping and Admin only)
