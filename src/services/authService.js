@@ -245,35 +245,40 @@ class AuthService {
         // Find user by email
         const user = await User.findOne({ email: email.toLowerCase() });
 
-        // Always return success message for security (don't reveal if email exists)
-        // But only send OTP if user exists and is active
-        if (user && user.isActive) {
-            // Generate OTP
-            const otp = this.generateOTP();
-
-            // Set OTP expiry (15 minutes from now)
-            const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
-            // Save OTP and expiry to user
-            user.resetOtp = otp;
-            user.resetOtpExpireAt = otpExpiry;
-            await user.save();
-
-            // Send OTP email
-            try {
-                await this.sendOTPEmail(user.email, otp, user.name);
-            } catch (error) {
-                // Clear OTP if email fails
-                user.resetOtp = null;
-                user.resetOtpExpireAt = null;
-                await user.save();
-                throw new Error("Failed to send OTP email. Please try again later.");
-            }
+        // Check if user exists
+        if (!user) {
+            throw new Error("No account found with this email address");
         }
 
-        // Always return the same message for security
+        // Check if user is active
+        if (!user.isActive) {
+            throw new Error("Account is deactivated. Please contact support.");
+        }
+
+        // Generate OTP
+        const otp = this.generateOTP();
+
+        // Set OTP expiry (15 minutes from now)
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+        // Save OTP and expiry to user
+        user.resetOtp = otp;
+        user.resetOtpExpireAt = otpExpiry;
+        await user.save();
+
+        // Send OTP email
+        try {
+            await this.sendOTPEmail(user.email, otp, user.name);
+        } catch (error) {
+            // Clear OTP if email fails
+            user.resetOtp = null;
+            user.resetOtpExpireAt = null;
+            await user.save();
+            throw new Error("Failed to send OTP email. Please try again later.");
+        }
+
         return {
-            message: "If an account exists with this email, an OTP has been sent.",
+            message: "OTP has been sent to your email address.",
         };
     }
 
@@ -307,7 +312,7 @@ class AuthService {
 
         // Check if OTP matches
         if (user.resetOtp !== otp) {
-            throw new Error("Invalid OTP or email");
+            throw new Error("Invalid OTP");
         }
 
         // Check if OTP is expired
