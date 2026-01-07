@@ -85,5 +85,42 @@ router.patch(
     bookingController.confirmBooking
 );
 
+/**
+ * @route   PATCH /api/bookings/:id/checkin
+ * @desc    Update check-in status (Receptionist/Admin only)
+ * @access  Private
+ */
+router.patch(
+    "/:id/checkin",
+    authenticate,
+    authorize("receptionist", "admin"),
+    bookingController.updateCheckInStatus
+);
+
+/**
+ * @route   PUT /api/bookings/:id
+ * @desc    Edit a booking (Receptionist/Admin only)
+ * @access  Private
+ */
+router.put(
+    "/:id",
+    authenticate,
+    authorize("receptionist", "admin"),
+    bookingController.editBooking
+);
+
+/**
+ * @route   GET /api/rooms/available
+ * @desc    Get available rooms for given check-in and check-out dates
+ * @access  Private (Receptionist/Admin/Guest)
+ * @query   checkInDate, checkOutDate
+ */
+router.get(
+    "/rooms/available",
+    authenticate,
+    authorize("guest", "receptionist", "admin"),
+    bookingController.getAvailableRooms
+);
+
 export default router;
 

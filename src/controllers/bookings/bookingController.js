@@ -158,6 +158,64 @@ class BookingController {
             next(error);
         }
     }
+
+        /**
+         * Update check-in status
+         * PATCH /api/bookings/:id/checkin
+         * Receptionist and Admin only
+         * Precondition: check-in should be today, checkout status is completed
+         */
+        async updateCheckInStatus(req, res, next) {
+            try {
+                const currentUser = req.user;
+                const booking = await bookingService.updateCheckInStatus(req.params.id, currentUser);
+                res.status(200).json({
+                    success: true,
+                    message: "Check-in updated successfully",
+                    data: booking,
+                });
+            } catch (error) {
+                next(error);
+            }
+        }
+
+    /**
+     * Edit a booking
+     * PUT /api/bookings/:id
+     * Receptionist/Admin only
+     * Cannot change customer
+     */
+    async editBooking(req, res, next) {
+        try {
+            const currentUser = req.user;
+            const booking = await bookingService.editBooking(req.params.id, req.body, currentUser);
+            res.status(200).json({
+                success: true,
+                message: "Booking updated successfully",
+                data: booking,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Get available rooms for given check-in and check-out dates
+     * GET /api/rooms/available
+     * Authenticated users only
+     */
+    async getAvailableRooms(req, res, next) {
+        try {
+            const { checkInDate, checkOutDate } = req.query;
+            const rooms = await bookingService.getAvailableRooms(checkInDate, checkOutDate);
+            res.status(200).json({
+                success: true,
+                data: rooms,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new BookingController();

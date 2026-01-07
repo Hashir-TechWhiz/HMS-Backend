@@ -718,6 +718,116 @@ class BookingService {
 
         return booking.toJSON();
     }
+
+    /**
+     * Update check-in status for a booking
+     * Receptionist/Admin only
+     * Precondition: check-in should be today, checkout status is completed
+     */
+    async updateCheckInStatus(bookingId, currentUser) {
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            throw new Error("Booking not found");
+        }
+        if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Unauthorized to update check-in status");
+        }
+        // Check preconditions
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkInDate = new Date(booking.checkInDate);
+        checkInDate.setHours(0, 0, 0, 0);
+        if (today.getTime() !== checkInDate.getTime()) {
+            throw new Error("Check-in can only be updated on the check-in date");
+        }
+        if (booking.status !== "completed") {
+            throw new Error("Check-out status must be completed before check-in can be updated");
+        }
+        booking.status = "checkedin";
+        booking.checkInUpdatedBy = currentUser.id;
+        booking.checkInUpdatedAt = new Date();
+        await booking.save();
+        return booking.toJSON();
+    }
+
+    /**
+     * Edit a booking
+     * Receptionist/Admin only
+     * Cannot change customer
+     */
+    async editBooking(bookingId, updateData, currentUser) {
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            throw new Error("Booking not found");
+        }
+        if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Unauthorized to edit booking");
+        }
+        // Prevent changing customer (guest or customerDetails)
+        if (updateData.guest || updateData.customerDetails) {
+            throw new Error("Cannot change customer for a booking");
+        }
+        // Only allow updating room, checkInDate, checkOutDate, status
+        if (updateData.room) booking.room = updateData.room;
+        if (updateData.checkInDate) booking.checkInDate = new Date(updateData.checkInDate);
+        if (updateData.checkOutDate) booking.checkOutDate = new Date(updateData.checkOutDate);
+        if (updateData.status) booking.status = updateData.status;
+        // Check for overlapping bookings if room or dates changed
+        if (updateData.room || updateData.checkInDate || updateData.checkOutDate) {
+            const hasOverlap = await this.hasOverlappingBooking(
+                booking.room,
+                booking.checkInDate,
+                booking.checkOutDate,
+                booking._id
+            );
+            if (hasOverlap) {
+                throw new Error("Room is already booked for the selected dates");
+            }
+        }
+        await booking.save();
+        return booking.toJSON();
+    }
+
+    /**
+     * Get available rooms for given check-in and check-out dates
+     * @param {Date} checkInDate
+     * @param {Date} checkOutDate
+     * @returns {Array} Available rooms
+     */
+    async getAvailableRooms(checkInDate, checkOutDate) {
+        // Validate dates
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkIn = new Date(checkInDate);
+        const checkOut = new Date(checkOutDate);
+        if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+            throw new Error("Invalid date format");
+        }
+        if (checkIn < today || checkOut <= checkIn) {
+            throw new Error("Invalid check-in/check-out dates");
+        }
+        // Find all rooms
+        const allRooms = await Room.find();
+        // Find all bookings that overlap with the given dates
+        const overlappingBookings = await Booking.find({
+            status: { $ne: "cancelled" },
+            $or: [
+                { checkInDate: { $lte: checkIn }, checkOutDate: { $gt: checkIn } },
+                { checkInDate: { $lt: checkOut }, checkOutDate: { $gte: checkOut } },
+                { checkInDate: { $gte: checkIn }, checkOutDate: { $lte: checkOut } },
+            ],
+        });
+        const bookedRoomIds = new Set(overlappingBookings.map(b => b.room.toString()));
+        // Filter rooms that are not booked
+        const availableRooms = allRooms.filter(room => !bookedRoomIds.has(room._id.toString()));
+        return availableRooms;
+    }
 }
 
 export default new BookingService();
