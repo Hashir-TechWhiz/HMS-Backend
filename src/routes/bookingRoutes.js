@@ -75,12 +75,13 @@ router.patch(
 /**
  * @route   PATCH /api/bookings/:id/confirm
  * @desc    Confirm a booking
- * @access  Private (Receptionist and Admin only)
+ * @access  Private (Guest, Receptionist, Admin)
+ * @note    Guests can only confirm their own bookings after payment
  */
 router.patch(
     "/:id/confirm",
     authenticate,
-    authorize("receptionist", "admin"),
+    authorize("guest", "receptionist", "admin"),
     bookingController.confirmBooking
 );
 

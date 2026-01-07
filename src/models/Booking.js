@@ -70,6 +70,25 @@ const bookingSchema = new mongoose.Schema(
             },
             default: "pending",
         },
+        // Cancellation penalty fields (for staff-managed cancellations)
+        cancellationPenalty: {
+            type: Number,
+            required: false,
+            default: 0,
+        },
+        cancelledBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: false,
+        },
+        cancellationReason: {
+            type: String,
+            required: false,
+        },
+        cancellationDate: {
+            type: Date,
+            required: false,
+        },
     },
     {
         timestamps: true,

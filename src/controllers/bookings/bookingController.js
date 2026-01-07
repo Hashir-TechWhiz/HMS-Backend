@@ -119,13 +119,14 @@ class BookingController {
      * PATCH /api/bookings/:id/cancel
      * Authenticated users only
      * Guests can only cancel their own bookings
-     * Receptionist and admin can cancel any booking
+     * Receptionist and admin can cancel any booking with optional penalty data
      */
     async cancelBooking(req, res, next) {
         try {
             const currentUser = req.user; // Set by authenticate middleware
+            const penaltyData = req.body; // Optional penalty data from request body
 
-            const booking = await bookingService.cancelBooking(req.params.id, currentUser);
+            const booking = await bookingService.cancelBooking(req.params.id, currentUser, penaltyData);
 
             res.status(200).json({
                 success: true,

@@ -152,13 +152,23 @@ class BookingService {
             throw new Error("Room is already booked for the selected dates");
         }
 
+        // Determine booking status based on booking type
+        // Guest bookings: pending (awaiting staff confirmation)
+        // Walk-in bookings: confirmed (staff creates them directly)
+        let bookingStatus = "pending";
+        if (finalCustomerDetails) {
+            // Walk-in booking (has customerDetails) - auto-confirmed
+            bookingStatus = "confirmed";
+        }
+        // Guest bookings remain pending regardless of payment
+
         // Create new booking
         const bookingPayload = {
             guest: finalGuestId,
             room: roomId,
             checkInDate: checkIn,
             checkOutDate: checkOut,
-            status: status || "pending",
+            status: bookingStatus,
         };
 
         // Only include customerDetails if it's not null
@@ -407,9 +417,10 @@ class BookingService {
      * Cancel a booking
      * @param {string} bookingId - Booking ID
      * @param {Object} currentUser - Current user making the request
+     * @param {Object} penaltyData - Optional penalty data (for staff cancellations)
      * @returns {Object} Updated booking
      */
-    async cancelBooking(bookingId, currentUser) {
+    async cancelBooking(bookingId, currentUser, penaltyData = null) {
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(bookingId)) {
             throw new Error("Invalid booking ID");
@@ -437,6 +448,10 @@ class BookingService {
             if (booking.guest._id.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only cancel your own bookings");
             }
+            // Guests can only cancel pending bookings (not confirmed)
+            if (booking.status === "confirmed") {
+                throw new Error("You cannot cancel a confirmed booking. Please contact the hotel directly for assistance");
+            }
         } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
             throw new Error("Unauthorized to cancel bookings");
         }
@@ -444,6 +459,15 @@ class BookingService {
 
         // Update booking status to cancelled
         booking.status = "cancelled";
+        booking.cancellationDate = new Date();
+
+        // Store penalty data if provided (staff-managed cancellations)
+        if (penaltyData && (currentUser.role === "receptionist" || currentUser.role === "admin")) {
+            booking.cancellationPenalty = penaltyData.cancellationPenalty || 0;
+            booking.cancelledBy = currentUser.id;
+            booking.cancellationReason = penaltyData.cancellationReason || null;
+        }
+
         await booking.save();
 
         // Send booking cancellation email (non-blocking - should not fail cancellation logic)
@@ -601,11 +625,6 @@ class BookingService {
      * @returns {Object} Updated booking
      */
     async confirmBooking(bookingId, currentUser) {
-        // Only receptionist and admin can confirm bookings
-        if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
-            throw new Error("Unauthorized. Only receptionists and admins can confirm bookings");
-        }
-
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(bookingId)) {
             throw new Error("Invalid booking ID");
@@ -618,6 +637,20 @@ class BookingService {
         if (!booking) {
             throw new Error("Booking not found");
         }
+
+        // Role-based authorization
+        if (currentUser.role === "guest") {
+            // Guests can only confirm their own bookings
+            if (!booking.guest) {
+                throw new Error("Access denied. You can only confirm your own bookings");
+            }
+            if (booking.guest._id.toString() !== currentUser.id) {
+                throw new Error("Access denied. You can only confirm your own bookings");
+            }
+        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Unauthorized to confirm bookings");
+        }
+        // Receptionist and admin can confirm any booking
 
         // Check if booking is already confirmed
         if (booking.status === "confirmed") {
