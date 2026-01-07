@@ -798,9 +798,10 @@ class BookingService {
      * Get available rooms for given check-in and check-out dates
      * @param {Date} checkInDate
      * @param {Date} checkOutDate
+     * @param {string} excludeBookingId - Optional booking ID to exclude from availability check
      * @returns {Array} Available rooms
      */
-    async getAvailableRooms(checkInDate, checkOutDate) {
+    async getAvailableRooms(checkInDate, checkOutDate, excludeBookingId = null) {
         // Validate dates
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -814,15 +815,21 @@ class BookingService {
         }
         // Find all rooms
         const allRooms = await Room.find();
-        // Find all bookings that overlap with the given dates
-        const overlappingBookings = await Booking.find({
+        const query = {
             status: { $ne: "cancelled" },
             $or: [
                 { checkInDate: { $lte: checkIn }, checkOutDate: { $gt: checkIn } },
                 { checkInDate: { $lt: checkOut }, checkOutDate: { $gte: checkOut } },
                 { checkInDate: { $gte: checkIn }, checkOutDate: { $lte: checkOut } },
             ],
-        });
+        };
+
+        if (excludeBookingId) {
+            query._id = { $ne: excludeBookingId };
+        }
+
+        // Find all bookings that overlap with the given dates
+        const overlappingBookings = await Booking.find(query);
         const bookedRoomIds = new Set(overlappingBookings.map(b => b.room.toString()));
         // Filter rooms that are not booked
         const availableRooms = allRooms.filter(room => !bookedRoomIds.has(room._id.toString()));

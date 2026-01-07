@@ -159,25 +159,25 @@ class BookingController {
         }
     }
 
-        /**
-         * Update check-in status
-         * PATCH /api/bookings/:id/checkin
-         * Receptionist and Admin only
-         * Precondition: check-in should be today, checkout status is completed
-         */
-        async updateCheckInStatus(req, res, next) {
-            try {
-                const currentUser = req.user;
-                const booking = await bookingService.updateCheckInStatus(req.params.id, currentUser);
-                res.status(200).json({
-                    success: true,
-                    message: "Check-in updated successfully",
-                    data: booking,
-                });
-            } catch (error) {
-                next(error);
-            }
+    /**
+     * Update check-in status
+     * PATCH /api/bookings/:id/checkin
+     * Receptionist and Admin only
+     * Precondition: check-in should be today, checkout status is completed
+     */
+    async updateCheckInStatus(req, res, next) {
+        try {
+            const currentUser = req.user;
+            const booking = await bookingService.updateCheckInStatus(req.params.id, currentUser);
+            res.status(200).json({
+                success: true,
+                message: "Check-in updated successfully",
+                data: booking,
+            });
+        } catch (error) {
+            next(error);
         }
+    }
 
     /**
      * Edit a booking
@@ -203,11 +203,14 @@ class BookingController {
      * Get available rooms for given check-in and check-out dates
      * GET /api/rooms/available
      * Authenticated users only
+     * @param {string} checkInDate - The desired check-in date (YYYY-MM-DD).
+     * @param {string} checkOutDate - The desired check-out date (YYYY-MM-DD).
+     * @param {string} [excludeBookingId] - Optional ID of a booking to exclude from the availability check (e.g., when editing an existing booking).
      */
     async getAvailableRooms(req, res, next) {
         try {
-            const { checkInDate, checkOutDate } = req.query;
-            const rooms = await bookingService.getAvailableRooms(checkInDate, checkOutDate);
+            const { checkInDate, checkOutDate, excludeBookingId } = req.query;
+            const rooms = await bookingService.getAvailableRooms(checkInDate, checkOutDate, excludeBookingId);
             res.status(200).json({
                 success: true,
                 data: rooms,
