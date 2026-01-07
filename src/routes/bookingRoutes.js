@@ -6,7 +6,22 @@ import authorize from "../middleware/authorize.js";
 const router = express.Router();
 
 /**
- * All booking routes require authentication
+ * Public routes - No authentication required
+ */
+
+/**
+ * @route   GET /api/bookings/check-availability
+ * @desc    Check room availability for given dates
+ * @query   roomId, checkInDate, checkOutDate
+ * @access  Public (no authentication required)
+ */
+router.get(
+    "/check-availability",
+    bookingController.checkAvailability
+);
+
+/**
+ * Authenticated routes
  */
 
 /**

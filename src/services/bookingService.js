@@ -8,6 +8,57 @@ import { bookingCancellationEmailTemplate } from "../templates/bookingCancellati
 
 class BookingService {
     /**
+     * Check room availability for given date range
+     * @param {string} roomId - Room ID
+     * @param {Date} checkInDate - Check-in date
+     * @param {Date} checkOutDate - Check-out date
+     * @returns {Object} Availability status
+     */
+    async checkAvailability(roomId, checkInDate, checkOutDate) {
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(roomId)) {
+            throw new Error("Invalid room ID");
+        }
+
+        // Validate room exists
+        const room = await Room.findById(roomId);
+        if (!room) {
+            throw new Error("Room not found");
+        }
+
+        // Parse dates
+        const checkIn = new Date(checkInDate);
+        const checkOut = new Date(checkOutDate);
+
+        // Validate dates
+        if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+            throw new Error("Invalid date format");
+        }
+
+        // Check if check-in date is in the past
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (checkIn < today) {
+            throw new Error("Check-in date cannot be in the past");
+        }
+
+        // Check if check-out date is after check-in date
+        if (checkOut <= checkIn) {
+            throw new Error("Check-out date must be after check-in date");
+        }
+
+        // Check for overlapping bookings
+        const hasOverlap = await this.hasOverlappingBooking(roomId, checkIn, checkOut);
+
+        return {
+            available: !hasOverlap,
+            roomId,
+            checkInDate: checkIn,
+            checkOutDate: checkOut,
+        };
+    }
+
+    /**
      * Check if a room has overlapping bookings for the given date range
      * @param {string} roomId - Room ID
      * @param {Date} checkInDate - Check-in date
@@ -153,14 +204,15 @@ class BookingService {
         }
 
         // Determine booking status based on booking type
-        // Guest bookings: pending (awaiting staff confirmation)
+        // Guest bookings: ALWAYS pending (awaiting staff confirmation)
         // Walk-in bookings: confirmed (staff creates them directly)
         let bookingStatus = "pending";
         if (finalCustomerDetails) {
             // Walk-in booking (has customerDetails) - auto-confirmed
             bookingStatus = "confirmed";
         }
-        // Guest bookings remain pending regardless of payment
+        // CRITICAL: Guest bookings (with finalGuestId) MUST remain pending until staff explicitly confirms
+        // This applies whether created by guest themselves OR by staff on behalf of guest
 
         // Create new booking
         const bookingPayload = {

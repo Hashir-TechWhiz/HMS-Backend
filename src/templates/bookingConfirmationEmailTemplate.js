@@ -5,8 +5,13 @@
  * @param {string} roomType - Room type
  * @param {string} checkInDate - Check-in date (formatted string)
  * @param {string} checkOutDate - Check-out date (formatted string)
- * @param {string} status - Booking status
+ * @param {string} status - Booking status (pending, confirmed, etc.)
  * @returns {string} HTML email template
+ * 
+ * NOTE: This template is used for BOTH initial booking creation AND confirmation
+ * - Guest online bookings: sent with status="pending" (awaiting staff confirmation)
+ * - Walk-in bookings: sent with status="confirmed" (created by staff directly)
+ * - After staff confirmation: sent with status="confirmed"
  */
 export function bookingConfirmationEmailTemplate(guestName, roomNumber, roomType, checkInDate, checkOutDate, status) {
     return `
@@ -91,9 +96,13 @@ export function bookingConfirmationEmailTemplate(guestName, roomNumber, roomType
             <div class="container">
                 <div class="content">
                     <div class="success-icon">✅</div>
-                    <h2 class="header">Booking Confirmation</h2>
+                    <h2 class="header">${status === 'confirmed' ? 'Booking Confirmed' : 'Booking Created'}</h2>
                     <p>Hello ${guestName},</p>
-                    <p>Thank you for choosing our hotel! Your booking has been successfully ${status === 'confirmed' ? 'confirmed' : 'created'}.</p>
+                    <p>Thank you for choosing our hotel! ${status === 'confirmed'
+            ? 'Your booking has been <strong>confirmed</strong> and is all set!'
+            : 'Your booking request has been received and is currently <strong>pending confirmation</strong> from our staff.'
+        }</p>
+                    ${status === 'pending' ? '<p style="color: #f39c12; font-weight: bold;">⏳ Please note: Your booking will be confirmed by our staff shortly. You will receive another email once confirmed.</p>' : ''}
                     
                     <div class="booking-details">
                         <h3>Booking Details</h3>

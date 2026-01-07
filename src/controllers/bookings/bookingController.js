@@ -2,6 +2,34 @@ import bookingService from "../../services/bookingService.js";
 
 class BookingController {
     /**
+     * Check room availability
+     * GET /api/bookings/check-availability
+     * Query params: roomId, checkInDate, checkOutDate
+     * Public access (no authentication required for checking)
+     */
+    async checkAvailability(req, res, next) {
+        try {
+            const { roomId, checkInDate, checkOutDate } = req.query;
+
+            if (!roomId || !checkInDate || !checkOutDate) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Room ID, check-in date, and check-out date are required",
+                });
+            }
+
+            const result = await bookingService.checkAvailability(roomId, checkInDate, checkOutDate);
+
+            res.status(200).json({
+                success: true,
+                data: result,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
      * Create a new booking
      * POST /api/bookings
      * Authenticated users only

@@ -46,12 +46,16 @@ class ReportService {
         const statusMap = {
             pending: 0,
             confirmed: 0,
+            checkedin: 0,
+            completed: 0,
             cancelled: 0,
         };
 
         // Populate status map with actual counts
         statusBreakdown.forEach((item) => {
-            statusMap[item.status] = item.count;
+            if (statusMap.hasOwnProperty(item.status)) {
+                statusMap[item.status] = item.count;
+            }
         });
 
         return {
