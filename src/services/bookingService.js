@@ -325,6 +325,42 @@ class BookingService {
             .skip(skip)
             .limit(limit);
 
+        // Auto-update booking statuses based on dates:
+        // - If today is greater than checkOutDate => mark as 'completed'
+        // - Else if today >= checkInDate and status is 'confirmed' => mark as 'checkedin'
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        for (const bookingDoc of bookings) {
+            try {
+                if (!bookingDoc) continue;
+
+                // Skip cancelled or already completed
+                if (bookingDoc.status === "cancelled" || bookingDoc.status === "completed") continue;
+
+                if (bookingDoc.checkOutDate) {
+                    const co = new Date(bookingDoc.checkOutDate);
+                    co.setHours(0, 0, 0, 0);
+                    if (today > co) {
+                        bookingDoc.status = "completed";
+                        await bookingDoc.save();
+                        continue;
+                    }
+                }
+
+                if (bookingDoc.checkInDate) {
+                    const ci = new Date(bookingDoc.checkInDate);
+                    ci.setHours(0, 0, 0, 0);
+                    if (today >= ci && bookingDoc.status === "confirmed") {
+                        bookingDoc.status = "checkedin";
+                        await bookingDoc.save();
+                    }
+                }
+            } catch (err) {
+                // Don't fail the whole request for one problematic booking; log and continue
+                console.error("Failed to auto-update booking status:", err.message);
+            }
+        }
+
         // Calculate total pages
         const totalPages = Math.ceil(totalBookings / limit);
 
@@ -535,6 +571,38 @@ class BookingService {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
+
+        // Auto-update booking statuses for guest bookings (same logic as staff view)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        for (const bookingDoc of bookings) {
+            try {
+                if (!bookingDoc) continue;
+
+                if (bookingDoc.status === "cancelled" || bookingDoc.status === "completed") continue;
+
+                if (bookingDoc.checkOutDate) {
+                    const co = new Date(bookingDoc.checkOutDate);
+                    co.setHours(0, 0, 0, 0);
+                    if (today > co) {
+                        bookingDoc.status = "completed";
+                        await bookingDoc.save();
+                        continue;
+                    }
+                }
+
+                if (bookingDoc.checkInDate) {
+                    const ci = new Date(bookingDoc.checkInDate);
+                    ci.setHours(0, 0, 0, 0);
+                    if (today >= ci && bookingDoc.status === "confirmed") {
+                        bookingDoc.status = "checkedin";
+                        await bookingDoc.save();
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to auto-update guest booking status:", err.message);
+            }
+        }
 
         // Calculate total pages
         const totalPages = Math.ceil(totalBookings / limit);
