@@ -1,6 +1,7 @@
 import Booking from "../models/Booking.js";
 import Room from "../models/Room.js";
 import ServiceRequest from "../models/ServiceRequest.js";
+import User from "../models/User.js";
 
 class ReportService {
     /**
@@ -229,6 +230,285 @@ class ReportService {
             bookings: bookingSummary,
             rooms: roomOverview,
             serviceRequests: serviceRequestOverview,
+        };
+    }
+
+    /**
+     * Get detailed booking report with pagination
+     * @param {Number} page - Page number (default: 1)
+     * @param {Number} limit - Items per page (default: 10)
+     * @param {Object} dateFilter - Optional date range filter { from, to }
+     * @param {String} status - Optional status filter
+     * @returns {Object} Paginated booking list with details
+     */
+    async getDetailedBookingReport(page = 1, limit = 10, dateFilter = {}, status = null) {
+        const skip = (page - 1) * limit;
+
+        // Build query with date and status filters
+        const query = {};
+        if (dateFilter.from || dateFilter.to) {
+            query.createdAt = {};
+            if (dateFilter.from) {
+                query.createdAt.$gte = new Date(dateFilter.from);
+            }
+            if (dateFilter.to) {
+                query.createdAt.$lte = new Date(dateFilter.to);
+            }
+        }
+        if (status) {
+            query.status = status;
+        }
+
+        // Get bookings with populated data
+        const [bookings, totalItems] = await Promise.all([
+            Booking.find(query)
+                .populate("guest", "name email")
+                .populate("room", "roomNumber roomType")
+                .populate("createdBy", "name")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Booking.countDocuments(query),
+        ]);
+
+        return {
+            items: bookings,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalItems / limit),
+                totalItems,
+                itemsPerPage: limit,
+            },
+        };
+    }
+
+    /**
+     * Get detailed payment report with pagination
+     * Based on confirmed/completed bookings (dummy payment data)
+     * @param {Number} page - Page number (default: 1)
+     * @param {Number} limit - Items per page (default: 10)
+     * @param {Object} dateFilter - Optional date range filter { from, to }
+     * @param {String} status - Optional payment status filter (for UI purposes, all are "Completed")
+     * @returns {Object} Paginated payment list
+     */
+    async getDetailedPaymentReport(page = 1, limit = 10, dateFilter = {}, status = null) {
+        const skip = (page - 1) * limit;
+
+        // Build query with booking status and date filter
+        const query = {
+            status: { $in: ["confirmed", "checkedin", "completed"] },
+        };
+
+        if (dateFilter.from || dateFilter.to) {
+            query.createdAt = {};
+            if (dateFilter.from) {
+                query.createdAt.$gte = new Date(dateFilter.from);
+            }
+            if (dateFilter.to) {
+                query.createdAt.$lte = new Date(dateFilter.to);
+            }
+        }
+        // Note: Status filter for payments is primarily for UI consistency
+        // All payment records show "Completed" status
+
+        // Get bookings that have payments (confirmed/completed status)
+        const [bookings, totalItems] = await Promise.all([
+            Booking.find(query)
+                .populate("guest", "name email")
+                .populate("room", "roomNumber pricePerNight")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Booking.countDocuments(query),
+        ]);
+
+        // Transform bookings to payment records
+        const payments = bookings.map((booking) => {
+            // Calculate total amount
+            const checkIn = new Date(booking.checkInDate);
+            const checkOut = new Date(booking.checkOutDate);
+            const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+            const pricePerNight = booking.room?.pricePerNight || 0;
+            const totalAmount = nights * pricePerNight;
+
+            // Determine guest/customer name
+            let guestName = "Walk-in Customer";
+            if (booking.guest?.name) {
+                guestName = booking.guest.name;
+            } else if (booking.customerDetails?.name) {
+                guestName = booking.customerDetails.name;
+            }
+
+            return {
+                _id: booking._id,
+                bookingId: booking._id,
+                guestName,
+                amount: totalAmount,
+                paymentMethod: "Card", // Dummy data - all payments via card
+                paymentStatus: "Completed",
+                createdAt: booking.createdAt,
+            };
+        });
+
+        return {
+            items: payments,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalItems / limit),
+                totalItems,
+                itemsPerPage: limit,
+            },
+        };
+    }
+
+    /**
+     * Get detailed room utilization report with pagination
+     * @param {Number} page - Page number (default: 1)
+     * @param {Number} limit - Items per page (default: 10)
+     * @param {String} status - Optional room status filter
+     * @returns {Object} Paginated room utilization list
+     */
+    async getDetailedRoomReport(page = 1, limit = 10, status = null) {
+        const skip = (page - 1) * limit;
+
+        // Build query with status filter
+        const matchQuery = status ? { status } : {};
+
+        // Get rooms with booking counts
+        const [rooms, totalItems] = await Promise.all([
+            Room.aggregate([
+                { $match: matchQuery },
+                {
+                    $lookup: {
+                        from: "bookings",
+                        localField: "_id",
+                        foreignField: "room",
+                        as: "bookings",
+                    },
+                },
+                {
+                    $project: {
+                        roomNumber: 1,
+                        roomType: 1,
+                        status: 1,
+                        totalBookings: { $size: "$bookings" },
+                    },
+                },
+                { $sort: { roomNumber: 1 } },
+                { $skip: skip },
+                { $limit: limit },
+            ]),
+            Room.countDocuments(matchQuery),
+        ]);
+
+        return {
+            items: rooms,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalItems / limit),
+                totalItems,
+                itemsPerPage: limit,
+            },
+        };
+    }
+
+    /**
+     * Get detailed service request report with pagination
+     * @param {Number} page - Page number (default: 1)
+     * @param {Number} limit - Items per page (default: 10)
+     * @param {Object} dateFilter - Optional date range filter { from, to }
+     * @param {String} status - Optional status filter
+     * @returns {Object} Paginated service request list
+     */
+    async getDetailedServiceRequestReport(page = 1, limit = 10, dateFilter = {}, status = null) {
+        const skip = (page - 1) * limit;
+
+        // Build query with date and status filters
+        const query = {};
+        if (dateFilter.from || dateFilter.to) {
+            query.createdAt = {};
+            if (dateFilter.from) {
+                query.createdAt.$gte = new Date(dateFilter.from);
+            }
+            if (dateFilter.to) {
+                query.createdAt.$lte = new Date(dateFilter.to);
+            }
+        }
+        if (status) {
+            query.status = status;
+        }
+
+        // Get service requests with populated data
+        const [serviceRequests, totalItems] = await Promise.all([
+            ServiceRequest.find(query)
+                .populate("assignedTo", "name")
+                .populate("room", "roomNumber")
+                .populate("requestedBy", "name")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            ServiceRequest.countDocuments(query),
+        ]);
+
+        return {
+            items: serviceRequests,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalItems / limit),
+                totalItems,
+                itemsPerPage: limit,
+            },
+        };
+    }
+
+    /**
+     * Get guest report with pagination
+     * @param {Number} page - Page number (default: 1)
+     * @param {Number} limit - Items per page (default: 10)
+     * @returns {Object} Paginated guest list with booking counts
+     */
+    async getDetailedGuestReport(page = 1, limit = 10) {
+        const skip = (page - 1) * limit;
+
+        // Get all guests with booking counts
+        const [guests, totalItems] = await Promise.all([
+            User.aggregate([
+                { $match: { role: "guest" } },
+                {
+                    $lookup: {
+                        from: "bookings",
+                        localField: "_id",
+                        foreignField: "guest",
+                        as: "bookings",
+                    },
+                },
+                {
+                    $project: {
+                        name: 1,
+                        email: 1,
+                        isActive: 1,
+                        totalBookings: { $size: "$bookings" },
+                        createdAt: 1,
+                    },
+                },
+                { $sort: { createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+            ]),
+            User.countDocuments({ role: "guest" }),
+        ]);
+
+        return {
+            items: guests,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalItems / limit),
+                totalItems,
+                itemsPerPage: limit,
+            },
         };
     }
 }

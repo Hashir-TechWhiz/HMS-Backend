@@ -57,5 +57,65 @@ router.get(
     reportController.getServiceRequestOverview
 );
 
+/**
+ * @route   GET /api/reports/bookings/detailed
+ * @desc    Get detailed booking report with pagination
+ * @access  Private (Admin, Receptionist only)
+ */
+router.get(
+    "/bookings/detailed",
+    authenticate,
+    authorize("admin", "receptionist"),
+    reportController.getDetailedBookingReport
+);
+
+/**
+ * @route   GET /api/reports/payments/detailed
+ * @desc    Get detailed payment report with pagination
+ * @access  Private (Admin, Receptionist only)
+ */
+router.get(
+    "/payments/detailed",
+    authenticate,
+    authorize("admin", "receptionist"),
+    reportController.getDetailedPaymentReport
+);
+
+/**
+ * @route   GET /api/reports/rooms/detailed
+ * @desc    Get detailed room utilization report with pagination
+ * @access  Private (Admin, Receptionist only)
+ */
+router.get(
+    "/rooms/detailed",
+    authenticate,
+    authorize("admin", "receptionist"),
+    reportController.getDetailedRoomReport
+);
+
+/**
+ * @route   GET /api/reports/service-requests/detailed
+ * @desc    Get detailed service request report with pagination
+ * @access  Private (Admin, Receptionist only)
+ */
+router.get(
+    "/service-requests/detailed",
+    authenticate,
+    authorize("admin", "receptionist"),
+    reportController.getDetailedServiceRequestReport
+);
+
+/**
+ * @route   GET /api/reports/guests/detailed
+ * @desc    Get detailed guest report with pagination
+ * @access  Private (Admin, Receptionist only)
+ */
+router.get(
+    "/guests/detailed",
+    authenticate,
+    authorize("admin", "receptionist"),
+    reportController.getDetailedGuestReport
+);
+
 export default router;
 
