@@ -37,9 +37,19 @@ class ServiceRequestService {
             throw new Error("Only guests can create service requests");
         }
 
-        // Check if booking is active (not cancelled)
-        if (booking.status === "cancelled") {
-            throw new Error("Cannot create service request for a cancelled booking");
+        // Validate booking status - must be checked in (active stay)
+        if (booking.status !== "checkedin") {
+            if (booking.status === "cancelled") {
+                throw new Error("Cannot create service request for a cancelled booking");
+            } else if (booking.status === "completed") {
+                throw new Error("Cannot create service request for a completed stay");
+            } else if (booking.status === "confirmed") {
+                throw new Error("Service requests are only available during an active stay. Please check in first");
+            } else if (booking.status === "pending") {
+                throw new Error("Service requests are only available during an active stay. Booking must be confirmed and checked in");
+            } else {
+                throw new Error("Service requests are only available during an active stay (after check-in)");
+            }
         }
 
         // Get room from booking
