@@ -186,6 +186,48 @@ class BookingController {
             next(error);
         }
     }
+
+    /**
+     * Check-in a booking
+     * PATCH /api/bookings/:id/check-in
+     * Receptionist and Admin only
+     */
+    async checkInBooking(req, res, next) {
+        try {
+            const currentUser = req.user; // Set by authenticate middleware
+
+            const booking = await bookingService.checkInBooking(req.params.id, currentUser);
+
+            res.status(200).json({
+                success: true,
+                message: "Booking checked-in successfully",
+                data: booking,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Check-out a booking
+     * PATCH /api/bookings/:id/check-out
+     * Receptionist and Admin only
+     */
+    async checkOutBooking(req, res, next) {
+        try {
+            const currentUser = req.user; // Set by authenticate middleware
+
+            const booking = await bookingService.checkOutBooking(req.params.id, currentUser);
+
+            res.status(200).json({
+                success: true,
+                message: "Booking checked-out successfully",
+                data: booking,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new BookingController();

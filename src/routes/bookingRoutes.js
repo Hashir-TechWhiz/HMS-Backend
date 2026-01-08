@@ -100,5 +100,29 @@ router.patch(
     bookingController.confirmBooking
 );
 
+/**
+ * @route   PATCH /api/bookings/:id/check-in
+ * @desc    Check-in a booking (manual action by staff)
+ * @access  Private (Receptionist, Admin)
+ */
+router.patch(
+    "/:id/check-in",
+    authenticate,
+    authorize("receptionist", "admin"),
+    bookingController.checkInBooking
+);
+
+/**
+ * @route   PATCH /api/bookings/:id/check-out
+ * @desc    Check-out a booking (manual action by staff)
+ * @access  Private (Receptionist, Admin)
+ */
+router.patch(
+    "/:id/check-out",
+    authenticate,
+    authorize("receptionist", "admin"),
+    bookingController.checkOutBooking
+);
+
 export default router;
 

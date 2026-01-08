@@ -377,42 +377,6 @@ class BookingService {
             .skip(skip)
             .limit(limit);
 
-        // Auto-update booking statuses based on dates:
-        // - If today is greater than checkOutDate => mark as 'completed'
-        // - Else if today >= checkInDate and status is 'confirmed' => mark as 'checkedin'
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        for (const bookingDoc of bookings) {
-            try {
-                if (!bookingDoc) continue;
-
-                // Skip cancelled or already completed
-                if (bookingDoc.status === "cancelled" || bookingDoc.status === "completed") continue;
-
-                if (bookingDoc.checkOutDate) {
-                    const co = new Date(bookingDoc.checkOutDate);
-                    co.setHours(0, 0, 0, 0);
-                    if (today > co) {
-                        bookingDoc.status = "completed";
-                        await bookingDoc.save();
-                        continue;
-                    }
-                }
-
-                if (bookingDoc.checkInDate) {
-                    const ci = new Date(bookingDoc.checkInDate);
-                    ci.setHours(0, 0, 0, 0);
-                    if (today >= ci && bookingDoc.status === "confirmed") {
-                        bookingDoc.status = "checkedin";
-                        await bookingDoc.save();
-                    }
-                }
-            } catch (err) {
-                // Don't fail the whole request for one problematic booking; log and continue
-                console.error("Failed to auto-update booking status:", err.message);
-            }
-        }
-
         // Calculate total pages
         const totalPages = Math.ceil(totalBookings / limit);
 
@@ -489,6 +453,15 @@ class BookingService {
         // Check if booking is already cancelled
         if (booking.status === "cancelled") {
             throw new Error("Booking is already cancelled");
+        }
+
+        // Prevent cancellation of checked-in or completed bookings
+        if (booking.status === "checkedin") {
+            throw new Error("Cannot cancel a checked-in booking. Please check-out the guest first.");
+        }
+
+        if (booking.status === "completed") {
+            throw new Error("Cannot cancel a completed booking");
         }
 
         // Role-based authorization
@@ -624,38 +597,6 @@ class BookingService {
             .skip(skip)
             .limit(limit);
 
-        // Auto-update booking statuses for guest bookings (same logic as staff view)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        for (const bookingDoc of bookings) {
-            try {
-                if (!bookingDoc) continue;
-
-                if (bookingDoc.status === "cancelled" || bookingDoc.status === "completed") continue;
-
-                if (bookingDoc.checkOutDate) {
-                    const co = new Date(bookingDoc.checkOutDate);
-                    co.setHours(0, 0, 0, 0);
-                    if (today > co) {
-                        bookingDoc.status = "completed";
-                        await bookingDoc.save();
-                        continue;
-                    }
-                }
-
-                if (bookingDoc.checkInDate) {
-                    const ci = new Date(bookingDoc.checkInDate);
-                    ci.setHours(0, 0, 0, 0);
-                    if (today >= ci && bookingDoc.status === "confirmed") {
-                        bookingDoc.status = "checkedin";
-                        await bookingDoc.save();
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to auto-update guest booking status:", err.message);
-            }
-        }
-
         // Calculate total pages
         const totalPages = Math.ceil(totalBookings / limit);
 
@@ -767,6 +708,92 @@ class BookingService {
             // Log email error but don't fail the confirmation
             console.error("Failed to send booking confirmation email:", emailError.message);
         }
+
+        return booking.toJSON();
+    }
+
+    /**
+     * Check-in a booking (manual action by staff)
+     * @param {string} bookingId - Booking ID
+     * @param {Object} currentUser - Current user making the request
+     * @returns {Object} Updated booking
+     */
+    async checkInBooking(bookingId, currentUser) {
+        // Only admin and receptionist can check-in bookings
+        if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+            throw new Error("Only admin and receptionist can check-in bookings");
+        }
+
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+
+        const booking = await Booking.findById(bookingId)
+            .populate("guest", "name email role")
+            .populate("createdBy", "name email role")
+            .populate("room", "roomNumber roomType pricePerNight images");
+
+        if (!booking) {
+            throw new Error("Booking not found");
+        }
+
+        // Check if booking is in the correct status (must be confirmed)
+        if (booking.status !== "confirmed") {
+            throw new Error(`Cannot check-in booking with status '${booking.status}'. Booking must be confirmed first.`);
+        }
+
+        // Validate check-in date - cannot check-in before scheduled check-in date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const checkInDate = new Date(booking.checkInDate);
+        checkInDate.setHours(0, 0, 0, 0);
+
+        if (today < checkInDate) {
+            throw new Error("Check-in is not allowed before the scheduled check-in date");
+        }
+
+        // Update booking status to checkedin
+        booking.status = "checkedin";
+        await booking.save();
+
+        return booking.toJSON();
+    }
+
+    /**
+     * Check-out a booking (manual action by staff)
+     * @param {string} bookingId - Booking ID
+     * @param {Object} currentUser - Current user making the request
+     * @returns {Object} Updated booking
+     */
+    async checkOutBooking(bookingId, currentUser) {
+        // Only admin and receptionist can check-out bookings
+        if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+            throw new Error("Only admin and receptionist can check-out bookings");
+        }
+
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+
+        const booking = await Booking.findById(bookingId)
+            .populate("guest", "name email role")
+            .populate("createdBy", "name email role")
+            .populate("room", "roomNumber roomType pricePerNight images");
+
+        if (!booking) {
+            throw new Error("Booking not found");
+        }
+
+        // Check if booking is in the correct status (must be checkedin)
+        if (booking.status !== "checkedin") {
+            throw new Error(`Cannot check-out booking with status '${booking.status}'. Booking must be checked-in first.`);
+        }
+
+        // Update booking status to completed
+        booking.status = "completed";
+        await booking.save();
 
         return booking.toJSON();
     }
