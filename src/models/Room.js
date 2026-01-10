@@ -35,6 +35,30 @@ const roomSchema = new mongoose.Schema(
             trim: true,
             default: "",
         },
+        amenities: {
+            type: [String],
+            default: [],
+            validate: {
+                validator: function (amenities) {
+                    // Optional field - empty array is valid
+                    if (!amenities || amenities.length === 0) return true;
+
+                    // Validate that all amenities are from the allowed list
+                    const allowedAmenities = [
+                        "Wi-Fi",
+                        "Air Conditioning",
+                        "TV",
+                        "Mini Bar",
+                        "Room Service",
+                        "Balcony",
+                        "Sea View",
+                        "Safe Locker"
+                    ];
+                    return amenities.every((amenity) => allowedAmenities.includes(amenity));
+                },
+                message: "Invalid amenity selected",
+            },
+        },
         images: {
             type: [String],
             required: [true, "At least one image is required"],

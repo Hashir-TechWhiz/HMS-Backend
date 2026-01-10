@@ -7,7 +7,7 @@ class RoomService {
      * @returns {Object} Created room
      */
     async createRoom(roomData) {
-        const { roomNumber, roomType, pricePerNight, capacity, description, images, status } = roomData;
+        const { roomNumber, roomType, pricePerNight, capacity, description, images, status, amenities } = roomData;
 
         // Validate required fields
         if (!roomNumber || !roomType || pricePerNight === undefined || !capacity) {
@@ -43,6 +43,7 @@ class RoomService {
             description: description || "",
             images,
             status: status || "available",
+            amenities: amenities || [],
         });
 
         await newRoom.save();
@@ -80,7 +81,7 @@ class RoomService {
 
         // Pagination
         const page = parseInt(pagination.page) || 1;
-        const limit = parseInt(pagination.limit) || 12;
+        const limit = parseInt(pagination.limit) || 10;
         const skip = (page - 1) * limit;
 
         // Get total count for pagination metadata
@@ -168,6 +169,7 @@ class RoomService {
             "description",
             "images",
             "status",
+            "amenities",
         ];
 
         const updates = {};
