@@ -81,7 +81,7 @@ class RoomService {
 
         // Pagination
         const page = parseInt(pagination.page) || 1;
-        const limit = parseInt(pagination.limit) || 10;
+        const limit = parseInt(pagination.limit) || 12;
         const skip = (page - 1) * limit;
 
         // Get total count for pagination metadata
