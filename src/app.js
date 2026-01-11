@@ -7,6 +7,7 @@ import bookingRoutes from "./routes/bookingRoutes.js";
 import serviceRequestRoutes from "./routes/serviceRequestRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
+import hotelRoutes from "./routes/hotelRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -29,6 +30,7 @@ app.get("/health", (req, res) => {
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/hotels", hotelRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/service-requests", serviceRequestRoutes);

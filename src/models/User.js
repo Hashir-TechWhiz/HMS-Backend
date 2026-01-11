@@ -34,6 +34,27 @@ const userSchema = new mongoose.Schema(
             default: "guest",
             required: [true, "Role is required"],
         },
+        hotelId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Hotel",
+            required: false,
+            validate: {
+                validator: async function (hotelId) {
+                    // Only receptionist and housekeeping need hotelId
+                    if (this.role === "receptionist" || this.role === "housekeeping") {
+                        if (!hotelId) {
+                            throw new Error(`${this.role} must be assigned to a hotel`);
+                        }
+                        const Hotel = mongoose.model("Hotel");
+                        const hotel = await Hotel.findById(hotelId);
+                        return hotel !== null;
+                    }
+                    // Admin and guest don't need hotelId
+                    return true;
+                },
+                message: "Hotel does not exist",
+            },
+        },
         isActive: {
             type: Boolean,
             default: true,
@@ -51,6 +72,9 @@ const userSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+
+// Index for faster queries on hotelId
+userSchema.index({ hotelId: 1 });
 
 // Pre-save hook to hash password before saving
 userSchema.pre("save", async function () {

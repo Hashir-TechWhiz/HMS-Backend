@@ -2,6 +2,19 @@ import mongoose from "mongoose";
 
 const bookingSchema = new mongoose.Schema(
     {
+        hotelId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Hotel",
+            required: [true, "Hotel is required"],
+            validate: {
+                validator: async function (hotelId) {
+                    const Hotel = mongoose.model("Hotel");
+                    const hotel = await Hotel.findById(hotelId);
+                    return hotel !== null;
+                },
+                message: "Hotel does not exist",
+            },
+        },
         guest: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -96,14 +109,15 @@ const bookingSchema = new mongoose.Schema(
 );
 
 // Indexes for faster queries
-bookingSchema.index({ guest: 1 });
-bookingSchema.index({ room: 1 });
-bookingSchema.index({ status: 1 });
-bookingSchema.index({ checkInDate: 1, checkOutDate: 1 });
-bookingSchema.index({ createdBy: 1 });
+bookingSchema.index({ hotelId: 1 });
+bookingSchema.index({ hotelId: 1, guest: 1 });
+bookingSchema.index({ hotelId: 1, room: 1 });
+bookingSchema.index({ hotelId: 1, status: 1 });
+bookingSchema.index({ hotelId: 1, checkInDate: 1, checkOutDate: 1 });
+bookingSchema.index({ hotelId: 1, createdBy: 1 });
 
-// Compound index for checking overlapping bookings
-bookingSchema.index({ room: 1, checkInDate: 1, checkOutDate: 1, status: 1 });
+// Compound index for checking overlapping bookings (hotel-scoped)
+bookingSchema.index({ hotelId: 1, room: 1, checkInDate: 1, checkOutDate: 1, status: 1 });
 
 // Pre-save hook to check for overlapping bookings
 bookingSchema.pre("save", async function () {
@@ -113,6 +127,7 @@ bookingSchema.pre("save", async function () {
 
         const overlappingBooking = await Booking.findOne({
             _id: { $ne: this._id }, // Exclude current booking
+            hotelId: this.hotelId, // Check only within the same hotel
             room: this.room,
             status: { $ne: "cancelled" }, // Only check non-cancelled bookings
             $or: [

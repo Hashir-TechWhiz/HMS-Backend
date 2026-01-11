@@ -2,6 +2,7 @@ import express from "express";
 import roomController from "../controllers/rooms/roomController.js";
 import authenticate from "../middleware/authenticate.js";
 import authorize from "../middleware/authorize.js";
+import injectHotelId from "../middleware/injectHotelId.js";
 
 const router = express.Router();
 
@@ -37,6 +38,7 @@ router.post(
     "/",
     authenticate,
     authorize("admin"),
+    injectHotelId,
     roomController.createRoom
 );
 

@@ -2,6 +2,19 @@ import mongoose from "mongoose";
 
 const serviceRequestSchema = new mongoose.Schema(
     {
+        hotelId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Hotel",
+            required: [true, "Hotel is required"],
+            validate: {
+                validator: async function (hotelId) {
+                    const Hotel = mongoose.model("Hotel");
+                    const hotel = await Hotel.findById(hotelId);
+                    return hotel !== null;
+                },
+                message: "Hotel does not exist",
+            },
+        },
         booking: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Booking",
@@ -70,7 +83,7 @@ const serviceRequestSchema = new mongoose.Schema(
             default: null,
             validate: {
                 validator: async function (userId) {
-                    if (!userId) return true; 
+                    if (!userId) return true;
                     const User = mongoose.model("User");
                     const user = await User.findById(userId);
                     return user !== null;
@@ -90,19 +103,20 @@ const serviceRequestSchema = new mongoose.Schema(
 );
 
 // Indexes for faster queries
-serviceRequestSchema.index({ booking: 1 });
-serviceRequestSchema.index({ room: 1 });
-serviceRequestSchema.index({ requestedBy: 1 });
-serviceRequestSchema.index({ status: 1 });
-serviceRequestSchema.index({ assignedRole: 1 });
-serviceRequestSchema.index({ serviceType: 1 });
-serviceRequestSchema.index({ assignedTo: 1 });
+serviceRequestSchema.index({ hotelId: 1 });
+serviceRequestSchema.index({ hotelId: 1, booking: 1 });
+serviceRequestSchema.index({ hotelId: 1, room: 1 });
+serviceRequestSchema.index({ hotelId: 1, requestedBy: 1 });
+serviceRequestSchema.index({ hotelId: 1, status: 1 });
+serviceRequestSchema.index({ hotelId: 1, assignedRole: 1 });
+serviceRequestSchema.index({ hotelId: 1, serviceType: 1 });
+serviceRequestSchema.index({ hotelId: 1, assignedTo: 1 });
 
-// Compound index for filtering by status and assigned role
-serviceRequestSchema.index({ status: 1, assignedRole: 1 });
+// Compound index for filtering by status and assigned role (hotel-scoped)
+serviceRequestSchema.index({ hotelId: 1, status: 1, assignedRole: 1 });
 
-// Compound index for filtering by assignedTo and status
-serviceRequestSchema.index({ assignedTo: 1, status: 1 });
+// Compound index for filtering by assignedTo and status (hotel-scoped)
+serviceRequestSchema.index({ hotelId: 1, assignedTo: 1, status: 1 });
 
 // Pre-save hook to automatically assign role based on service type
 serviceRequestSchema.pre("save", function () {

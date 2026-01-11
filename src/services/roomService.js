@@ -7,9 +7,13 @@ class RoomService {
      * @returns {Object} Created room
      */
     async createRoom(roomData) {
-        const { roomNumber, roomType, pricePerNight, capacity, description, images, status, amenities } = roomData;
+        const { hotelId, roomNumber, roomType, pricePerNight, capacity, description, images, status, amenities } = roomData;
 
         // Validate required fields
+        if (!hotelId) {
+            throw new Error("Hotel ID is required");
+        }
+
         if (!roomNumber || !roomType || pricePerNight === undefined || !capacity) {
             throw new Error("Room number, room type, price per night, and capacity are required");
         }
@@ -27,15 +31,16 @@ class RoomService {
             throw new Error("Maximum of 4 image URLs allowed");
         }
 
-        // Check if room number already exists
-        const existingRoom = await Room.findOne({ roomNumber });
+        // Check if room number already exists in this hotel
+        const existingRoom = await Room.findOne({ hotelId, roomNumber });
 
         if (existingRoom) {
-            throw new Error(`Room with number ${roomNumber} already exists`);
+            throw new Error(`Room with number ${roomNumber} already exists in this hotel`);
         }
 
         // Create new room
         const newRoom = new Room({
+            hotelId,
             roomNumber,
             roomType,
             pricePerNight,
@@ -59,6 +64,11 @@ class RoomService {
      */
     async getAllRooms(filters = {}, pagination = {}) {
         const query = {};
+
+        // Apply hotel filter if provided
+        if (filters.hotelId) {
+            query.hotelId = filters.hotelId;
+        }
 
         // Apply filters
         if (filters.roomType) {
@@ -89,6 +99,7 @@ class RoomService {
 
         // Get paginated rooms
         const rooms = await Room.find(query)
+            .populate('hotelId', 'name code')
             .sort({ roomNumber: 1 })
             .skip(skip)
             .limit(limit);
@@ -136,12 +147,15 @@ class RoomService {
             throw new Error("Room not found");
         }
 
-        // If roomNumber is being updated, check for uniqueness
+        // If roomNumber is being updated, check for uniqueness within the same hotel
         if (updateData.roomNumber && updateData.roomNumber !== existingRoom.roomNumber) {
-            const duplicateRoom = await Room.findOne({ roomNumber: updateData.roomNumber });
+            const duplicateRoom = await Room.findOne({
+                hotelId: existingRoom.hotelId,
+                roomNumber: updateData.roomNumber
+            });
 
             if (duplicateRoom) {
-                throw new Error(`Room with number ${updateData.roomNumber} already exists`);
+                throw new Error(`Room with number ${updateData.roomNumber} already exists in this hotel`);
             }
         }
 
