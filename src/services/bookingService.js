@@ -214,8 +214,9 @@ class BookingService {
         // CRITICAL: Guest bookings (with finalGuestId) MUST remain pending until staff explicitly confirms
         // This applies whether created by guest themselves OR by staff on behalf of guest
 
-        // Create new booking
+        // Create new booking with hotelId from room
         const bookingPayload = {
+            hotelId: room.hotelId, // Automatically get hotelId from the room
             guest: finalGuestId,
             room: roomId,
             checkInDate: checkIn,
@@ -713,29 +714,35 @@ class BookingService {
     }
 
     /**
-     * Check-in a booking (manual action by staff)
+     * Check-in a booking (manual action by staff or triggered by guest)
      * @param {string} bookingId - Booking ID
+     * @param {Object} checkInData - Guest check-in details
      * @param {Object} currentUser - Current user making the request
      * @returns {Object} Updated booking
      */
-    async checkInBooking(bookingId, currentUser) {
-        // Only admin and receptionist can check-in bookings
-        if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
-            throw new Error("Only admin and receptionist can check-in bookings");
-        }
-
+    async checkInBooking(bookingId, checkInData, currentUser) {
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(bookingId)) {
             throw new Error("Invalid booking ID");
         }
 
-        const booking = await Booking.findById(bookingId)
-            .populate("guest", "name email role")
-            .populate("createdBy", "name email role")
-            .populate("room", "roomNumber roomType pricePerNight images");
-
+        const booking = await Booking.findById(bookingId);
         if (!booking) {
             throw new Error("Booking not found");
+        }
+
+        // Authorization: Only Guest or Receptionist/Admin can check-in
+        if (currentUser.role === "guest") {
+            if (!booking.guest || booking.guest.toString() !== currentUser.id) {
+                throw new Error("Access denied. You can only check-in your own bookings");
+            }
+        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Unauthorized to check-in bookings");
+        }
+
+        // Cannot check-in twice
+        if (booking.isCheckedIn) {
+            throw new Error("Guest is already checked-in");
         }
 
         // Check if booking is in the correct status (must be confirmed)
@@ -743,31 +750,42 @@ class BookingService {
             throw new Error(`Cannot check-in booking with status '${booking.status}'. Booking must be confirmed first.`);
         }
 
-        // Validate check-in date - cannot check-in before scheduled check-in date
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const checkInDate = new Date(booking.checkInDate);
-        checkInDate.setHours(0, 0, 0, 0);
-
-        if (today < checkInDate) {
-            throw new Error("Check-in is not allowed before the scheduled check-in date");
+        // Validate required fields
+        const { nicPassport, nationality, phoneNumber, country, visaDetails } = checkInData;
+        if (!nicPassport || !nationality || !phoneNumber || !country) {
+            throw new Error("NIC/Passport, Nationality, Phone Number, and Country are required for check-in");
         }
 
-        // Update booking status to checkedin
+        // Update booking status and details
         booking.status = "checkedin";
+        booking.isCheckedIn = true;
+        booking.checkInDetails = {
+            nicPassport,
+            nationality,
+            phoneNumber,
+            country,
+            visaDetails: visaDetails || "",
+            checkedInAt: new Date(),
+            checkedInBy: currentUser.id,
+        };
+
         await booking.save();
+        await booking.populate([
+            { path: "room", select: "roomNumber roomType pricePerNight images" },
+            { path: "guest", select: "name email role" }
+        ]);
 
         return booking.toJSON();
     }
 
     /**
-     * Check-out a booking (manual action by staff)
+     * Check-out a booking
      * @param {string} bookingId - Booking ID
      * @param {Object} currentUser - Current user making the request
      * @returns {Object} Updated booking
      */
     async checkOutBooking(bookingId, currentUser) {
-        // Only admin and receptionist can check-out bookings
+        // Only admin and receptionist can finalize check-out
         if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
             throw new Error("Only admin and receptionist can check-out bookings");
         }
@@ -777,23 +795,55 @@ class BookingService {
             throw new Error("Invalid booking ID");
         }
 
-        const booking = await Booking.findById(bookingId)
-            .populate("guest", "name email role")
-            .populate("createdBy", "name email role")
-            .populate("room", "roomNumber roomType pricePerNight images");
-
+        const booking = await Booking.findById(bookingId);
         if (!booking) {
             throw new Error("Booking not found");
         }
 
         // Check if booking is in the correct status (must be checkedin)
-        if (booking.status !== "checkedin") {
-            throw new Error(`Cannot check-out booking with status '${booking.status}'. Booking must be checked-in first.`);
+        if (booking.status !== "checkedin" || !booking.isCheckedIn) {
+            throw new Error("Booking must be checked-in before check-out");
+        }
+
+        // Import services dynamically to avoid circular dependencies if any
+        const { default: invoiceService } = await import("./invoiceService.js");
+        const { default: housekeepingRosterService } = await import("./housekeepingRosterService.js");
+
+        // Verify that an invoice exists and is settled
+        let invoice;
+        try {
+            invoice = await invoiceService.getInvoiceByBookingId(bookingId, currentUser);
+        } catch (error) {
+            throw new Error("Invoice must be generated before checkout");
+        }
+
+        if (invoice.paymentStatus !== "paid") {
+            throw new Error("Invoice must be settled (paid) before checkout");
         }
 
         // Update booking status to completed
         booking.status = "completed";
+        booking.isCheckedOut = true;
+        booking.checkOutDetails = {
+            checkedOutAt: new Date(),
+            checkedOutBy: currentUser.id,
+        };
+
         await booking.save();
+
+        // Auto-trigger cleaning request after check-out
+        try {
+            const { default: serviceRequestService } = await import("./serviceRequestService.js");
+            await serviceRequestService.createCheckoutCleaningRequest(booking.hotelId, booking._id, booking.room);
+        } catch (cleaningError) {
+            console.error("Failed to trigger auto-cleaning request:", cleaningError.message);
+            // We don't fail the checkout if cleaning request fails, but we log it
+        }
+
+        await booking.populate([
+            { path: "room", select: "roomNumber roomType pricePerNight images" },
+            { path: "guest", select: "name email role" }
+        ]);
 
         return booking.toJSON();
     }

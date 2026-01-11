@@ -195,8 +195,9 @@ class BookingController {
     async checkInBooking(req, res, next) {
         try {
             const currentUser = req.user; // Set by authenticate middleware
+            const checkInData = req.body;
 
-            const booking = await bookingService.checkInBooking(req.params.id, currentUser);
+            const booking = await bookingService.checkInBooking(req.params.id, checkInData, currentUser);
 
             res.status(200).json({
                 success: true,

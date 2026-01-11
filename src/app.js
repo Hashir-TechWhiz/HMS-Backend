@@ -8,6 +8,8 @@ import serviceRequestRoutes from "./routes/serviceRequestRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
 import hotelRoutes from "./routes/hotelRoutes.js";
+import invoiceRoutes from "./routes/invoiceRoutes.js";
+import housekeepingRosterRoutes from "./routes/housekeepingRosterRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -34,6 +36,8 @@ app.use("/api/hotels", hotelRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/service-requests", serviceRequestRoutes);
+app.use("/api/invoices", invoiceRoutes);
+app.use("/api/housekeeping", housekeepingRosterRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/admin/users", adminUserRoutes);
 

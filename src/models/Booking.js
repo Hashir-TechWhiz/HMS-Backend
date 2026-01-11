@@ -102,6 +102,63 @@ const bookingSchema = new mongoose.Schema(
             type: Date,
             required: false,
         },
+        // Check-in details
+        isCheckedIn: {
+            type: Boolean,
+            default: false,
+        },
+        checkInDetails: {
+            nicPassport: {
+                type: String,
+                required: false,
+                trim: true,
+            },
+            nationality: {
+                type: String,
+                required: false,
+                trim: true,
+            },
+            phoneNumber: {
+                type: String,
+                required: false,
+                trim: true,
+            },
+            country: {
+                type: String,
+                required: false,
+                trim: true,
+            },
+            visaDetails: {
+                type: String,
+                required: false,
+                trim: true,
+            },
+            checkedInAt: {
+                type: Date,
+                required: false,
+            },
+            checkedInBy: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+                required: false,
+            },
+        },
+        // Check-out details
+        isCheckedOut: {
+            type: Boolean,
+            default: false,
+        },
+        checkOutDetails: {
+            checkedOutAt: {
+                type: Date,
+                required: false,
+            },
+            checkedOutBy: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+                required: false,
+            },
+        },
     },
     {
         timestamps: true,

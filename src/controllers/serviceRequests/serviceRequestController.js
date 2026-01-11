@@ -148,7 +148,7 @@ class ServiceRequestController {
     async updateServiceRequestStatus(req, res, next) {
         try {
             const currentUser = req.user; // Set by authenticate middleware
-            const { status } = req.body;
+            const { status, finalPrice } = req.body;
 
             if (!status) {
                 return res.status(400).json({
@@ -160,7 +160,8 @@ class ServiceRequestController {
             const serviceRequest = await serviceRequestService.updateServiceRequestStatus(
                 req.params.id,
                 status,
-                currentUser
+                currentUser,
+                finalPrice
             );
 
             res.status(200).json({

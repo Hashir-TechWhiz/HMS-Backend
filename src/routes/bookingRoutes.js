@@ -108,7 +108,7 @@ router.patch(
 router.patch(
     "/:id/check-in",
     authenticate,
-    authorize("receptionist", "admin"),
+    authorize("guest", "receptionist", "admin"),
     bookingController.checkInBooking
 );
 
