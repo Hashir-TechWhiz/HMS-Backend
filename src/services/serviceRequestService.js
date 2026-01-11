@@ -18,7 +18,7 @@ class ServiceRequestService {
             throw new Error("Booking ID and service type are required");
         }
 
-        // Validate booking exists
+        // Validate booking exists and populate hotelId
         const booking = await Booking.findById(bookingId).populate("room");
         if (!booking) {
             throw new Error("Booking not found");
@@ -61,9 +61,10 @@ class ServiceRequestService {
             throw new Error("Room not found");
         }
 
-        // Create new service request
+        // Create new service request with hotelId from booking
         // The assignedRole will be automatically set by the pre-save hook
         const newServiceRequest = new ServiceRequest({
+            hotelId: booking.hotelId, // Inherit hotelId from booking
             booking: bookingId,
             room: roomId,
             requestedBy: currentUser.id,
@@ -323,12 +324,13 @@ class ServiceRequestService {
             throw new Error("Invalid staff ID");
         }
 
-        // Find the service request
+        // Find the service request and populate hotelId
         const serviceRequest = await ServiceRequest.findById(requestId)
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
             .populate("requestedBy", "name email role")
-            .populate("assignedTo", "name email role");
+            .populate("assignedTo", "name email role")
+            .populate("hotelId", "name code");
 
         if (!serviceRequest) {
             throw new Error("Service request not found");
@@ -350,6 +352,16 @@ class ServiceRequestService {
         // Verify staff role matches request assigned role
         if (staffMember.role !== serviceRequest.assignedRole) {
             throw new Error(`Staff member must have ${serviceRequest.assignedRole} role`);
+        }
+
+        // Verify staff belongs to the same hotel as the service request
+        if (serviceRequest.hotelId && staffMember.hotelId) {
+            const requestHotelId = serviceRequest.hotelId._id || serviceRequest.hotelId;
+            const staffHotelId = staffMember.hotelId._id || staffMember.hotelId;
+
+            if (requestHotelId.toString() !== staffHotelId.toString()) {
+                throw new Error("Cannot assign staff from a different hotel. Staff must belong to the same hotel as the service request");
+            }
         }
 
         // Assign the request

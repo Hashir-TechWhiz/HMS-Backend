@@ -40,6 +40,7 @@ const getAllUsers = async (filters = {}, pagination = {}) => {
         // Execute query
         const users = await User.find(query)
             .select("-password -resetOtp -resetOtpExpireAt -__v")
+            .populate("hotelId", "name code city country")
             .skip(skip)
             .limit(limitNum)
             .sort({ createdAt: -1 });
@@ -136,7 +137,7 @@ const updateUser = async (userId, updateData, currentUser) => {
         }
 
         // Only allow specific fields to be updated
-        const allowedFields = ["name", "role", "isActive"];
+        const allowedFields = ["name", "role", "isActive", "hotelId"];
         const updates = {};
 
         for (const field of allowedFields) {
@@ -151,6 +152,15 @@ const updateUser = async (userId, updateData, currentUser) => {
                     }
                 }
                 updates[field] = updateData[field];
+            }
+        }
+
+        // Validate hotelId requirement for staff roles
+        const finalRole = updates.role || user.role;
+        if ((finalRole === "receptionist" || finalRole === "housekeeping")) {
+            const finalHotelId = updates.hotelId !== undefined ? updates.hotelId : user.hotelId;
+            if (!finalHotelId) {
+                throw new Error("Hotel assignment is required for receptionist and housekeeping staff");
             }
         }
 
