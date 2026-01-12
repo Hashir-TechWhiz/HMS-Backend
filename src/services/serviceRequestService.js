@@ -1,6 +1,7 @@
 import ServiceRequest from "../models/ServiceRequest.js";
 import Booking from "../models/Booking.js";
 import Room from "../models/Room.js";
+import ServiceCatalog from "../models/ServiceCatalog.js";
 import mongoose from "mongoose";
 
 class ServiceRequestService {
@@ -55,6 +56,27 @@ class ServiceRequestService {
         // Get room from booking
         const roomId = booking.room._id || booking.room;
 
+        // Fetch pricing from Service Catalog (if available)
+        let fixedPrice = null;
+        let description = requestData.description || "";
+
+        // Only fetch pricing for non-"other" service types
+        if (serviceType !== "other") {
+            const catalogEntry = await ServiceCatalog.findOne({
+                hotelId: booking.hotelId,
+                serviceType: serviceType,
+                isActive: true
+            });
+
+            if (catalogEntry) {
+                fixedPrice = catalogEntry.fixedPrice;
+                // Use catalog description if no custom description provided
+                if (!description) {
+                    description = catalogEntry.description || "";
+                }
+            }
+        }
+
         // Create new service request with hotelId from booking
         const newServiceRequest = new ServiceRequest({
             hotelId: booking.hotelId, // Inherit hotelId from booking
@@ -62,6 +84,8 @@ class ServiceRequestService {
             room: roomId,
             requestedBy: currentUser.id,
             serviceType,
+            description,
+            fixedPrice, // Set from catalog (null for "other" type)
             notes: notes || "",
             priority: priority || "normal",
             status: "pending",

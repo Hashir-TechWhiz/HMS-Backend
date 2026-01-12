@@ -20,6 +20,9 @@ const serviceCatalogSchema = new mongoose.Schema(
             required: [true, "Service type is required"],
             enum: {
                 values: [
+                    "cleaning",
+                    "housekeeping",
+                    "room_service",
                     "food_service",
                     "medical_assistance",
                     "massage",
@@ -57,14 +60,6 @@ const serviceCatalogSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
-        category: {
-            type: String,
-            enum: {
-                values: ["wellness", "food_beverage", "facilities", "maintenance", "other"],
-                message: "{VALUE} is not a valid category",
-            },
-            default: "other",
-        },
     },
     {
         timestamps: true,
@@ -75,7 +70,6 @@ const serviceCatalogSchema = new mongoose.Schema(
 serviceCatalogSchema.index({ hotelId: 1 });
 serviceCatalogSchema.index({ hotelId: 1, serviceType: 1 });
 serviceCatalogSchema.index({ hotelId: 1, isActive: 1 });
-serviceCatalogSchema.index({ hotelId: 1, category: 1 });
 
 // Compound unique index - one service type per hotel
 serviceCatalogSchema.index({ hotelId: 1, serviceType: 1 }, { unique: true });

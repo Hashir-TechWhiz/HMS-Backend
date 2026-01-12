@@ -785,11 +785,6 @@ class BookingService {
      * @returns {Object} Updated booking
      */
     async checkOutBooking(bookingId, currentUser) {
-        // Only admin and receptionist can finalize check-out
-        if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
-            throw new Error("Only admin and receptionist can check-out bookings");
-        }
-
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(bookingId)) {
             throw new Error("Invalid booking ID");
@@ -798,6 +793,17 @@ class BookingService {
         const booking = await Booking.findById(bookingId);
         if (!booking) {
             throw new Error("Booking not found");
+        }
+
+        // Authorization check
+        // - Admin and receptionist can check-out any booking
+        // - Guest can only check-out their own booking
+        if (currentUser.role === "guest") {
+            if (booking.guest.toString() !== currentUser.id) {
+                throw new Error("You can only check-out your own bookings");
+            }
+        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+            throw new Error("Unauthorized to check-out bookings");
         }
 
         // Check if booking is in the correct status (must be checkedin)

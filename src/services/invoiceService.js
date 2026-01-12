@@ -12,11 +12,6 @@ class InvoiceService {
      * @returns {Object} Generated invoice
      */
     async generateInvoice(bookingId, currentUser) {
-        // Only admin and receptionist can generate invoices
-        if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
-            throw new Error("Only admin and receptionist can generate invoices");
-        }
-
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(bookingId)) {
             throw new Error("Invalid booking ID");
@@ -35,6 +30,17 @@ class InvoiceService {
 
         if (!booking) {
             throw new Error("Booking not found");
+        }
+
+        // Authorization check
+        // - Admin and receptionist can generate invoice for any booking
+        // - Guest can only generate invoice for their own booking
+        if (currentUser.role === "guest") {
+            if (booking.guest.toString() !== currentUser.id) {
+                throw new Error("You can only generate invoices for your own bookings");
+            }
+        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+            throw new Error("Unauthorized to generate invoices");
         }
 
         // Booking must be checked-in to generate invoice
@@ -153,19 +159,25 @@ class InvoiceService {
      * @returns {Object} Updated invoice
      */
     async updatePaymentStatus(invoiceId, paymentData, currentUser) {
-        // Only admin and receptionist can update payment status
-        if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
-            throw new Error("Only admin and receptionist can update payment status");
-        }
-
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(invoiceId)) {
             throw new Error("Invalid invoice ID");
         }
 
-        const invoice = await Invoice.findById(invoiceId);
+        const invoice = await Invoice.findById(invoiceId).populate("guest", "_id");
         if (!invoice) {
             throw new Error("Invoice not found");
+        }
+
+        // Authorization check
+        // - Admin and receptionist can update payment status for any invoice
+        // - Guest can only update payment status for their own invoice
+        if (currentUser.role === "guest") {
+            if (!invoice.guest || invoice.guest._id.toString() !== currentUser.id) {
+                throw new Error("You can only update payment status for your own invoices");
+            }
+        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+            throw new Error("Unauthorized to update payment status");
         }
 
         const { paidAmount, paymentStatus } = paymentData;
