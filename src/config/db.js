@@ -6,7 +6,7 @@ const connectDB = async () => {
 
         const mongoURI = isTestEnv
             ? process.env.MONGO_URI_TEST
-            : process.env.MONGO_URI;
+            : process.env.MONGO_URI_TEST2;
 
         if (!mongoURI) {
             throw new Error(

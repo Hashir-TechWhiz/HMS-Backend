@@ -2,10 +2,22 @@ import mongoose from "mongoose";
 
 const roomSchema = new mongoose.Schema(
     {
+        hotelId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Hotel",
+            required: [true, "Hotel is required"],
+            validate: {
+                validator: async function (hotelId) {
+                    const Hotel = mongoose.model("Hotel");
+                    const hotel = await Hotel.findById(hotelId);
+                    return hotel !== null;
+                },
+                message: "Hotel does not exist",
+            },
+        },
         roomNumber: {
             type: String,
             required: [true, "Room number is required"],
-            unique: true,
             trim: true,
         },
         roomType: {
@@ -100,9 +112,11 @@ const roomSchema = new mongoose.Schema(
 );
 
 // Index for faster queries
-// Note: roomNumber already has an index via unique: true
-roomSchema.index({ status: 1 });
-roomSchema.index({ roomType: 1 });
+// Compound index: roomNumber must be unique per hotel
+roomSchema.index({ hotelId: 1, roomNumber: 1 }, { unique: true });
+roomSchema.index({ hotelId: 1, status: 1 });
+roomSchema.index({ hotelId: 1, roomType: 1 });
+roomSchema.index({ hotelId: 1 });
 
 // Instance method to get room as JSON (excluding __v)
 roomSchema.methods.toJSON = function () {

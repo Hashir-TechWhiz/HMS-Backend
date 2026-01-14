@@ -7,7 +7,13 @@ class RoomController {
      */
     async createRoom(req, res, next) {
         try {
-            const room = await roomService.createRoom(req.body);
+            // Include hotelId from request (injected by middleware or provided by admin)
+            const roomData = {
+                ...req.body,
+                hotelId: req.body.hotelId || req.hotelId
+            };
+
+            const room = await roomService.createRoom(roomData);
 
             res.status(201).json({
                 success: true,
@@ -27,6 +33,7 @@ class RoomController {
     async getAllRooms(req, res, next) {
         try {
             const filters = {
+                hotelId: req.query.hotelId || req.hotelId, // From middleware or query
                 roomType: req.query.roomType,
                 status: req.query.status,
                 minPrice: req.query.minPrice,

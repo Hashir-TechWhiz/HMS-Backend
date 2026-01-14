@@ -124,7 +124,7 @@ class AuthService {
         }
 
         // Validate required fields
-        const { name, email, password, role } = userData;
+        const { name, email, password, role, hotelId } = userData;
 
         if (!name || !email || !password) {
             throw new Error("Name, email, and password are required");
@@ -143,14 +143,27 @@ class AuthService {
             throw new Error(`Invalid role. Must be one of: ${validRoles.join(", ")}`);
         }
 
+        // Validate hotelId for staff roles
+        const finalRole = role || "guest";
+        if ((finalRole === "receptionist" || finalRole === "housekeeping") && !hotelId) {
+            throw new Error("Hotel assignment is required for receptionist and housekeeping staff");
+        }
+
         // Create new user
-        const newUser = new User({
+        const newUserData = {
             name,
             email,
             password,
-            role: role || "guest", // Default to guest if not specified
+            role: finalRole,
             isActive: userData.isActive !== undefined ? userData.isActive : true,
-        });
+        };
+
+        // Add hotelId if provided
+        if (hotelId) {
+            newUserData.hotelId = hotelId;
+        }
+
+        const newUser = new User(newUserData);
 
         await newUser.save();
 

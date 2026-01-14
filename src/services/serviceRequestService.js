@@ -1,6 +1,7 @@
 import ServiceRequest from "../models/ServiceRequest.js";
 import Booking from "../models/Booking.js";
 import Room from "../models/Room.js";
+import ServiceCatalog from "../models/ServiceCatalog.js";
 import mongoose from "mongoose";
 
 class ServiceRequestService {
@@ -11,14 +12,14 @@ class ServiceRequestService {
      * @returns {Object} Created service request
      */
     async createServiceRequest(requestData, currentUser) {
-        const { bookingId, serviceType, notes } = requestData;
+        const { bookingId, serviceType, notes, priority } = requestData;
 
         // Validate required fields
         if (!bookingId || !serviceType) {
             throw new Error("Booking ID and service type are required");
         }
 
-        // Validate booking exists
+        // Validate booking exists and populate hotelId
         const booking = await Booking.findById(bookingId).populate("room");
         if (!booking) {
             throw new Error("Booking not found");
@@ -33,12 +34,12 @@ class ServiceRequestService {
             if (booking.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only create service requests for your own bookings");
             }
-        } else {
-            throw new Error("Only guests can create service requests");
+        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Only guests, receptionists, or admins can create service requests");
         }
 
-        // Validate booking status - must be checked in (active stay)
-        if (booking.status !== "checkedin") {
+        // Validate booking status - must be checked in (active stay) for guests
+        if (currentUser.role === "guest" && booking.status !== "checkedin") {
             if (booking.status === "cancelled") {
                 throw new Error("Cannot create service request for a cancelled booking");
             } else if (booking.status === "completed") {
@@ -55,20 +56,38 @@ class ServiceRequestService {
         // Get room from booking
         const roomId = booking.room._id || booking.room;
 
-        // Validate room exists
-        const room = await Room.findById(roomId);
-        if (!room) {
-            throw new Error("Room not found");
+        // Fetch pricing from Service Catalog (if available)
+        let fixedPrice = null;
+        let description = requestData.description || "";
+
+        // Only fetch pricing for non-"other" service types
+        if (serviceType !== "other") {
+            const catalogEntry = await ServiceCatalog.findOne({
+                hotelId: booking.hotelId,
+                serviceType: serviceType,
+                isActive: true
+            });
+
+            if (catalogEntry) {
+                fixedPrice = catalogEntry.fixedPrice;
+                // Use catalog description if no custom description provided
+                if (!description) {
+                    description = catalogEntry.description || "";
+                }
+            }
         }
 
-        // Create new service request
-        // The assignedRole will be automatically set by the pre-save hook
+        // Create new service request with hotelId from booking
         const newServiceRequest = new ServiceRequest({
+            hotelId: booking.hotelId, // Inherit hotelId from booking
             booking: bookingId,
             room: roomId,
             requestedBy: currentUser.id,
             serviceType,
+            description,
+            fixedPrice, // Set from catalog (null for "other" type)
             notes: notes || "",
+            priority: priority || "normal",
             status: "pending",
         });
 
@@ -81,6 +100,54 @@ class ServiceRequestService {
             { path: "requestedBy", select: "name email role" },
         ]);
 
+        return newServiceRequest.toJSON();
+    }
+
+    /**
+     * Create a checkout cleaning request
+     * @param {string} hotelId - Hotel ID
+     * @param {string} bookingId - Booking ID
+     * @param {string} roomId - Room ID
+     * @returns {Object} Created service request
+     */
+    async createCheckoutCleaningRequest(hotelId, bookingId, roomId) {
+        // Find available housekeeping staff for this hotel to auto-assign
+        const HousekeepingStaff = await mongoose.model("User").find({
+            hotelId,
+            role: "housekeeping",
+            isActive: true,
+        });
+
+        let assignedTo = null;
+        if (HousekeepingStaff.length > 0) {
+            // Simple round-robin or least-workload could be used here
+            // For now, let's pick the one with least pending tasks
+            const staffWorkload = await Promise.all(
+                HousekeepingStaff.map(async (staff) => {
+                    const pendingTasks = await ServiceRequest.countDocuments({
+                        assignedTo: staff._id,
+                        status: { $in: ["pending", "in_progress"] }
+                    });
+                    return { staff, pendingTasks };
+                })
+            );
+            staffWorkload.sort((a, b) => a.pendingTasks - b.pendingTasks);
+            assignedTo = staffWorkload[0].staff._id;
+        }
+
+        const newServiceRequest = new ServiceRequest({
+            hotelId,
+            booking: bookingId,
+            room: roomId,
+            requestedBy: assignedTo || null, // Auto-created by system, assign to staff if available
+            serviceType: "cleaning",
+            description: "Automated post-checkout cleaning request",
+            priority: "high",
+            status: "pending",
+            assignedTo,
+        });
+
+        await newServiceRequest.save();
         return newServiceRequest.toJSON();
     }
 
@@ -323,12 +390,13 @@ class ServiceRequestService {
             throw new Error("Invalid staff ID");
         }
 
-        // Find the service request
+        // Find the service request and populate hotelId
         const serviceRequest = await ServiceRequest.findById(requestId)
             .populate("booking", "checkInDate checkOutDate status")
             .populate("room", "roomNumber roomType")
             .populate("requestedBy", "name email role")
-            .populate("assignedTo", "name email role");
+            .populate("assignedTo", "name email role")
+            .populate("hotelId", "name code");
 
         if (!serviceRequest) {
             throw new Error("Service request not found");
@@ -352,6 +420,16 @@ class ServiceRequestService {
             throw new Error(`Staff member must have ${serviceRequest.assignedRole} role`);
         }
 
+        // Verify staff belongs to the same hotel as the service request
+        if (serviceRequest.hotelId && staffMember.hotelId) {
+            const requestHotelId = serviceRequest.hotelId._id || serviceRequest.hotelId;
+            const staffHotelId = staffMember.hotelId._id || staffMember.hotelId;
+
+            if (requestHotelId.toString() !== staffHotelId.toString()) {
+                throw new Error("Cannot assign staff from a different hotel. Staff must belong to the same hotel as the service request");
+            }
+        }
+
         // Assign the request
         serviceRequest.assignedTo = staffId;
         await serviceRequest.save();
@@ -369,7 +447,7 @@ class ServiceRequestService {
      * @param {Object} currentUser - Current user making the request
      * @returns {Object} Updated service request
      */
-    async updateServiceRequestStatus(requestId, newStatus, currentUser) {
+    async updateServiceRequestStatus(requestId, newStatus, currentUser, finalPrice) {
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(requestId)) {
             throw new Error("Invalid service request ID");
@@ -382,11 +460,7 @@ class ServiceRequestService {
         }
 
         // Find the service request
-        const serviceRequest = await ServiceRequest.findById(requestId)
-            .populate("booking", "checkInDate checkOutDate status")
-            .populate("room", "roomNumber roomType")
-            .populate("requestedBy", "name email role")
-            .populate("assignedTo", "name email role");
+        const serviceRequest = await ServiceRequest.findById(requestId);
 
         if (!serviceRequest) {
             throw new Error("Service request not found");
@@ -400,20 +474,35 @@ class ServiceRequestService {
             }
 
             // Housekeeping cannot self-assign - must be assigned by admin
-            if (!serviceRequest.assignedTo || serviceRequest.assignedTo._id.toString() !== currentUser.id) {
-                throw new Error("Access denied. You can only update requests assigned to you by admin");
+            if (!serviceRequest.assignedTo || serviceRequest.assignedTo.toString() !== currentUser.id) {
+                throw new Error("Access denied. You can only update requests assigned to you");
             }
-        } else if (currentUser.role !== "admin") {
-            // Only housekeeping and admin can update status
-            throw new Error("Access denied. Only housekeeping staff and admin can update service request status");
+        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+            // Only housekeeping, admin and receptionist can update status
+            throw new Error("Access denied. Unauthorized to update service request status");
         }
 
         // Update status
         serviceRequest.status = newStatus;
+
+        if (newStatus === "completed") {
+            serviceRequest.completedAt = new Date();
+            if (finalPrice !== undefined) {
+                serviceRequest.finalPrice = finalPrice;
+            } else if (!serviceRequest.finalPrice && serviceRequest.fixedPrice) {
+                serviceRequest.finalPrice = serviceRequest.fixedPrice;
+            }
+        }
+
         await serviceRequest.save();
 
         // Re-populate after save
-        await serviceRequest.populate("assignedTo", "name email role");
+        await serviceRequest.populate([
+            { path: "booking", select: "checkInDate checkOutDate status" },
+            { path: "room", select: "roomNumber roomType" },
+            { path: "requestedBy", select: "name email role" },
+            { path: "assignedTo", select: "name email role" }
+        ]);
 
         return serviceRequest.toJSON();
     }
