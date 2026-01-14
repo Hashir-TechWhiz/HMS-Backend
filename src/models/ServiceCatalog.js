@@ -68,10 +68,9 @@ const serviceCatalogSchema = new mongoose.Schema(
 
 // Indexes for faster queries
 serviceCatalogSchema.index({ hotelId: 1 });
-serviceCatalogSchema.index({ hotelId: 1, serviceType: 1 });
 serviceCatalogSchema.index({ hotelId: 1, isActive: 1 });
 
-// Compound unique index - one service type per hotel
+// Compound unique index - one service type per hotel (also covers hotelId + serviceType queries)
 serviceCatalogSchema.index({ hotelId: 1, serviceType: 1 }, { unique: true });
 
 // Instance method to get service catalog as JSON (excluding __v)

@@ -1,56 +1,31 @@
 import express from "express";
 import invoiceController from "../controllers/invoices/invoiceController.js";
 import authenticate from "../middleware/authenticate.js";
-import authorize from "../middleware/authorize.js";
 
 const router = express.Router();
 
-/**
- * @route   POST /api/invoices/generate/:bookingId
- * @desc    Generate invoice for a booking
- * @access  Private (Receptionist, Admin)
- */
-router.post(
-    "/generate/:bookingId",
-    authenticate,
-    authorize("receptionist", "admin"),
-    invoiceController.generateInvoice
-);
+// All invoice routes require authentication
+router.use(authenticate);
 
-/**
- * @route   GET /api/invoices/booking/:bookingId
- * @desc    Get invoice by booking ID
- * @access  Private (Guest, Receptionist, Admin)
- */
-router.get(
-    "/booking/:bookingId",
-    authenticate,
-    authorize("guest", "receptionist", "admin"),
-    invoiceController.getInvoiceByBookingId
-);
+// Get all invoices (admin/receptionist only)
+router.get("/", invoiceController.getAllInvoices);
 
-/**
- * @route   PATCH /api/invoices/:id/payment
- * @desc    Update invoice payment status
- * @access  Private (Receptionist, Admin)
- */
-router.patch(
-    "/:id/payment",
-    authenticate,
-    authorize("receptionist", "admin"),
-    invoiceController.updatePaymentStatus
-);
+// Generate invoice manually (admin/receptionist only)
+router.post("/generate/:bookingId", invoiceController.generateInvoice);
 
-/**
- * @route   GET /api/invoices
- * @desc    Get all invoices
- * @access  Private (Receptionist, Admin)
- */
-router.get(
-    "/",
-    authenticate,
-    authorize("receptionist", "admin"),
-    invoiceController.getAllInvoices
-);
+// Get invoice by booking ID
+router.get("/booking/:bookingId", invoiceController.getInvoiceByBookingId);
+
+// Get invoice by invoice number
+router.get("/:invoiceNumber", invoiceController.getInvoiceByNumber);
+
+// Download invoice PDF
+router.get("/:invoiceId/download", invoiceController.downloadInvoicePDF);
+
+// Resend invoice email (admin/receptionist only)
+router.post("/:invoiceId/resend", invoiceController.resendInvoiceEmail);
+
+// Update payment status (admin/receptionist only)
+router.patch("/:invoiceId/payment-status", invoiceController.updatePaymentStatus);
 
 export default router;

@@ -62,8 +62,7 @@ const hotelSchema = new mongoose.Schema(
     }
 );
 
-// Index for faster queries
-hotelSchema.index({ code: 1 });
+// Index for faster queries (code already indexed via unique: true)
 hotelSchema.index({ status: 1 });
 hotelSchema.index({ city: 1 });
 
