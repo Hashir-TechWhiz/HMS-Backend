@@ -8,7 +8,8 @@ class ReportController {
      */
     async getBookingSummary(req, res, next) {
         try {
-            const summary = await reportService.getBookingSummary();
+            const currentUser = req.user; // Set by authenticate middleware
+            const summary = await reportService.getBookingSummary(currentUser);
 
             res.status(200).json({
                 success: true,
@@ -26,7 +27,8 @@ class ReportController {
      */
     async getRoomOverview(req, res, next) {
         try {
-            const overview = await reportService.getRoomOverview();
+            const currentUser = req.user; // Set by authenticate middleware
+            const overview = await reportService.getRoomOverview(currentUser);
 
             res.status(200).json({
                 success: true,
@@ -44,7 +46,8 @@ class ReportController {
      */
     async getServiceRequestOverview(req, res, next) {
         try {
-            const overview = await reportService.getServiceRequestOverview();
+            const currentUser = req.user; // Set by authenticate middleware
+            const overview = await reportService.getServiceRequestOverview(currentUser);
 
             res.status(200).json({
                 success: true,
@@ -62,7 +65,8 @@ class ReportController {
      */
     async getAllReports(req, res, next) {
         try {
-            const reports = await reportService.getAllReports();
+            const currentUser = req.user; // Set by authenticate middleware
+            const reports = await reportService.getAllReports(currentUser);
 
             res.status(200).json({
                 success: true,
@@ -81,6 +85,7 @@ class ReportController {
      */
     async getDetailedBookingReport(req, res, next) {
         try {
+            const currentUser = req.user; // Set by authenticate middleware
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const dateFilter = {
@@ -89,7 +94,7 @@ class ReportController {
             };
             const status = req.query.status || null;
 
-            const report = await reportService.getDetailedBookingReport(page, limit, dateFilter, status);
+            const report = await reportService.getDetailedBookingReport(currentUser, page, limit, dateFilter, status);
 
             res.status(200).json({
                 success: true,
@@ -108,6 +113,7 @@ class ReportController {
      */
     async getDetailedPaymentReport(req, res, next) {
         try {
+            const currentUser = req.user; // Set by authenticate middleware
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const dateFilter = {
@@ -116,7 +122,7 @@ class ReportController {
             };
             const status = req.query.status || null;
 
-            const report = await reportService.getDetailedPaymentReport(page, limit, dateFilter, status);
+            const report = await reportService.getDetailedPaymentReport(currentUser, page, limit, dateFilter, status);
 
             res.status(200).json({
                 success: true,
@@ -135,11 +141,12 @@ class ReportController {
      */
     async getDetailedRoomReport(req, res, next) {
         try {
+            const currentUser = req.user; // Set by authenticate middleware
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const status = req.query.status || null;
 
-            const report = await reportService.getDetailedRoomReport(page, limit, status);
+            const report = await reportService.getDetailedRoomReport(currentUser, page, limit, status);
 
             res.status(200).json({
                 success: true,
@@ -158,6 +165,7 @@ class ReportController {
      */
     async getDetailedServiceRequestReport(req, res, next) {
         try {
+            const currentUser = req.user; // Set by authenticate middleware
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const dateFilter = {
@@ -166,7 +174,7 @@ class ReportController {
             };
             const status = req.query.status || null;
 
-            const report = await reportService.getDetailedServiceRequestReport(page, limit, dateFilter, status);
+            const report = await reportService.getDetailedServiceRequestReport(currentUser, page, limit, dateFilter, status);
 
             res.status(200).json({
                 success: true,
@@ -185,10 +193,11 @@ class ReportController {
      */
     async getDetailedGuestReport(req, res, next) {
         try {
+            const currentUser = req.user; // Set by authenticate middleware
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
 
-            const report = await reportService.getDetailedGuestReport(page, limit);
+            const report = await reportService.getDetailedGuestReport(currentUser, page, limit);
 
             res.status(200).json({
                 success: true,

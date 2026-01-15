@@ -246,6 +246,16 @@ class ServiceRequestService {
 
         const query = {};
 
+        // Role-based hotel filtering
+        if (currentUser.role === "receptionist") {
+            // Receptionist can only see service requests for their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            query.hotelId = currentUser.hotelId;
+        }
+        // Admin can see all service requests (no hotel filter)
+
         // Apply filters
         if (filters.status) {
             query.status = filters.status;
@@ -325,13 +335,19 @@ class ServiceRequestService {
             throw new Error("Access denied. Only housekeeping staff can access assigned tasks");
         }
 
+        // Housekeeping staff must be assigned to a hotel
+        if (!currentUser.hotelId) {
+            throw new Error("Housekeeping staff must be assigned to a hotel");
+        }
+
         // Pagination
         const page = parseInt(pagination.page) || 1;
         const limit = parseInt(pagination.limit) || 10;
         const skip = (page - 1) * limit;
 
-        // Filter by assigned role AND assigned to current user
+        // Filter by hotel, assigned role AND assigned to current user
         const query = {
+            hotelId: currentUser.hotelId,
             assignedRole: "housekeeping",
             assignedTo: currentUser.id
         };
@@ -482,6 +498,13 @@ class ServiceRequestService {
 
         // Authorization check
         if (currentUser.role === "housekeeping") {
+            // Housekeeping can only update requests from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Housekeeping staff must be assigned to a hotel");
+            }
+            if (serviceRequest.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only update requests from your assigned hotel");
+            }
             // Housekeeping can only update requests assigned to them
             if (serviceRequest.assignedRole !== "housekeeping") {
                 throw new Error("Access denied. This task is not assigned to housekeeping");
@@ -491,7 +514,15 @@ class ServiceRequestService {
             if (!serviceRequest.assignedTo || serviceRequest.assignedTo.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only update requests assigned to you");
             }
-        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only update service requests from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (serviceRequest.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only update service requests from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             // Only housekeeping, admin and receptionist can update status
             throw new Error("Access denied. Unauthorized to update service request status");
         }
@@ -550,6 +581,13 @@ class ServiceRequestService {
                 throw new Error("Access denied. You can only view your own service requests");
             }
         } else if (currentUser.role === "housekeeping") {
+            // Housekeeping can only view requests from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Housekeeping staff must be assigned to a hotel");
+            }
+            if (serviceRequest.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view requests from your assigned hotel");
+            }
             // Housekeeping can only view requests assigned to them
             if (serviceRequest.assignedRole !== "housekeeping") {
                 throw new Error("Access denied. This task is not assigned to housekeeping");
@@ -558,7 +596,15 @@ class ServiceRequestService {
             if (!serviceRequest.assignedTo || serviceRequest.assignedTo._id.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view requests assigned to you");
             }
-        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only view service requests from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (serviceRequest.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view service requests from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             throw new Error("Unauthorized to view service requests");
         }
 

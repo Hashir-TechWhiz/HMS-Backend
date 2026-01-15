@@ -13,6 +13,7 @@ class AuthService {
             id: user._id,
             email: user.email,
             role: user.role,
+            hotelId: user.hotelId || null, // Include hotelId for staff users
         };
 
         const token = jwt.sign(payload, process.env.JWT_SECRET, {

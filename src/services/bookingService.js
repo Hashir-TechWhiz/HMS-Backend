@@ -320,8 +320,23 @@ class BookingService {
         if (currentUser.role === "guest") {
             // Guests can only see their own bookings (guest bookings only)
             query.guest = currentUser.id;
-        } else if (currentUser.role === "receptionist" || currentUser.role === "admin") {
-            // Receptionist and admin can see all bookings (both guest and walk-in)
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only see bookings for their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            query.hotelId = currentUser.hotelId;
+            
+            // Apply optional filters
+            if (filters.guestId) {
+                // Filter by guest ID (only guest bookings)
+                query.guest = filters.guestId;
+            }
+            if (filters.roomId) {
+                query.room = filters.roomId;
+            }
+        } else if (currentUser.role === "admin") {
+            // Admin can see all bookings (both guest and walk-in)
             // Apply optional filters
             if (filters.guestId) {
                 // Filter by guest ID (only guest bookings)
@@ -422,10 +437,18 @@ class BookingService {
             if (booking.guest._id.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view your own bookings");
             }
-        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only view bookings from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view bookings from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             throw new Error("Unauthorized to view bookings");
         }
-        // Receptionist and admin can view all bookings (both guest and walk-in)
+        // Admin can view all bookings (both guest and walk-in)
 
         return booking.toJSON();
     }
@@ -478,10 +501,18 @@ class BookingService {
             if (booking.status === "confirmed") {
                 throw new Error("You cannot cancel a confirmed booking. Please contact the hotel directly for assistance");
             }
-        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only cancel bookings from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only cancel bookings from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             throw new Error("Unauthorized to cancel bookings");
         }
-        // Receptionist and admin can cancel any booking (both guest and walk-in)
+        // Admin can cancel any booking (both guest and walk-in)
 
         // Update booking status to cancelled
         booking.status = "cancelled";
@@ -641,10 +672,18 @@ class BookingService {
             if (booking.guest._id.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only confirm your own bookings");
             }
-        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only confirm bookings from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only confirm bookings from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             throw new Error("Unauthorized to confirm bookings");
         }
-        // Receptionist and admin can confirm any booking
+        // Admin can confirm any booking
 
         // Check if booking is already confirmed
         if (booking.status === "confirmed") {
@@ -736,7 +775,15 @@ class BookingService {
             if (!booking.guest || booking.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only check-in your own bookings");
             }
-        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only check-in bookings from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only check-in bookings from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             throw new Error("Unauthorized to check-in bookings");
         }
 
@@ -796,13 +843,22 @@ class BookingService {
         }
 
         // Authorization check
-        // - Admin and receptionist can check-out any booking
+        // - Admin can check-out any booking
+        // - Receptionist can check-out bookings from their assigned hotel
         // - Guest can only check-out their own booking
         if (currentUser.role === "guest") {
             if (booking.guest.toString() !== currentUser.id) {
                 throw new Error("You can only check-out your own bookings");
             }
-        } else if (currentUser.role !== "admin" && currentUser.role !== "receptionist") {
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only check-out bookings from their assigned hotel
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only check-out bookings from your assigned hotel");
+            }
+        } else if (currentUser.role !== "admin") {
             throw new Error("Unauthorized to check-out bookings");
         }
 

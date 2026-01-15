@@ -24,6 +24,7 @@ const authenticate = async (req, res, next) => {
             id: decoded.id,
             email: decoded.email,
             role: decoded.role,
+            hotelId: decoded.hotelId || null, // Include hotelId for staff users
         };
 
         next();
