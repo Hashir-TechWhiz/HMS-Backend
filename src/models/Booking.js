@@ -58,6 +58,11 @@ const bookingSchema = new mongoose.Schema(
             required: [true, "Check-in date is required"],
             validate: {
                 validator: function (value) {
+                    // Only validate date is not in past when creating new booking or modifying checkInDate
+                    // This allows checkout to proceed even after dates have passed
+                    if (!this.isNew && !this.isModified('checkInDate')) {
+                        return true;
+                    }
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     return value >= today;

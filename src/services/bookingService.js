@@ -811,23 +811,35 @@ class BookingService {
             throw new Error("Booking must be checked-in before check-out");
         }
 
-        // Import services dynamically to avoid circular dependencies if any
-        const { default: invoiceService } = await import("./invoiceService.js");
-        const { default: housekeepingRosterService } = await import("./housekeepingRosterService.js");
+        // Populate booking details for invoice generation (BEFORE marking as completed)
+        await booking.populate([
+            { path: "room", select: "roomNumber roomType pricePerNight images" },
+            { path: "guest", select: "name email role" },
+            { path: "hotelId" }
+        ]);
 
-        // Verify that an invoice exists and is settled
+        // OPTION A LIFECYCLE: Generate invoice DURING checkout (while status is still 'checkedin')
         let invoice;
         try {
-            invoice = await invoiceService.getInvoiceByBookingId(bookingId, currentUser);
-        } catch (error) {
-            throw new Error("Invoice must be generated before checkout");
+            const { default: invoiceService } = await import("./invoiceService.js");
+
+            // Check if invoice already exists (in case of retry)
+            try {
+                invoice = await invoiceService.getInvoiceByBookingId(bookingId, currentUser);
+            } catch (error) {
+                // Invoice doesn't exist, generate it (status is 'checkedin' at this point)
+                invoice = await invoiceService.generateInvoice(bookingId, currentUser);
+
+                // Generate and email PDF invoice
+                await invoiceService.generateAndEmailInvoicePDF(invoice._id);
+            }
+        } catch (invoiceError) {
+            console.error("Failed to generate/email invoice:", invoiceError.message);
+            // We don't fail the checkout if invoice generation fails, but we log it
+            // The invoice can be generated manually later
         }
 
-        if (invoice.paymentStatus !== "paid") {
-            throw new Error("Invoice must be settled (paid) before checkout");
-        }
-
-        // Update booking status to completed
+        // NOW mark booking as completed (AFTER invoice generation)
         booking.status = "completed";
         booking.isCheckedOut = true;
         booking.checkOutDetails = {
@@ -846,12 +858,13 @@ class BookingService {
             // We don't fail the checkout if cleaning request fails, but we log it
         }
 
-        await booking.populate([
-            { path: "room", select: "roomNumber roomType pricePerNight images" },
-            { path: "guest", select: "name email role" }
-        ]);
+        // Return booking with invoice info
+        const bookingData = booking.toJSON();
+        if (invoice) {
+            bookingData.invoice = invoice;
+        }
 
-        return booking.toJSON();
+        return bookingData;
     }
 }
 

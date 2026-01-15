@@ -91,7 +91,7 @@ class RoomService {
 
         // Pagination
         const page = parseInt(pagination.page) || 1;
-        const limit = parseInt(pagination.limit) || 10;
+        const limit = parseInt(pagination.limit) || 12;
         const skip = (page - 1) * limit;
 
         // Get total count for pagination metadata
@@ -99,7 +99,7 @@ class RoomService {
 
         // Get paginated rooms
         const rooms = await Room.find(query)
-            .populate('hotelId', 'name code')
+            .populate('hotelId', 'name code city country address')
             .sort({ roomNumber: 1 })
             .skip(skip)
             .limit(limit);
@@ -124,7 +124,8 @@ class RoomService {
      * @returns {Object} Room object
      */
     async getRoomById(roomId) {
-        const room = await Room.findById(roomId);
+        const room = await Room.findById(roomId)
+            .populate('hotelId', 'name code city country address');
 
         if (!room) {
             throw new Error("Room not found");
