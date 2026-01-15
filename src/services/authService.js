@@ -15,6 +15,12 @@ class AuthService {
             role: user.role,
         };
 
+        // Include hotelId for staff members (receptionist, housekeeping)
+        // This is needed for hotel-based filtering in queries
+        if (user.hotelId) {
+            payload.hotelId = user.hotelId;
+        }
+
         const token = jwt.sign(payload, process.env.JWT_SECRET, {
             expiresIn: process.env.JWT_EXPIRES_IN || "7d",
         });

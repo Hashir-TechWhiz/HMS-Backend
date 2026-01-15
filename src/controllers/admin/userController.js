@@ -183,3 +183,32 @@ export const getUserStatistics = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/admin/users/hotel-staff
+ * Get hotel staff by role (for assignment purposes)
+ */
+export const getHotelStaffByRole = async (req, res) => {
+    try {
+        const { hotelId, role } = req.query;
+
+        if (!hotelId) {
+            return res.status(400).json({
+                success: false,
+                message: "Hotel ID is required",
+            });
+        }
+
+        const staff = await userService.getHotelStaffByRole(hotelId, role);
+
+        res.status(200).json({
+            success: true,
+            message: "Hotel staff retrieved successfully",
+            data: staff,
+        });
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};

@@ -60,4 +60,15 @@ router.patch(
     housekeepingRosterController.assignTask
 );
 
+/**
+ * @route   GET /api/housekeeping/cleaning-sessions
+ * @desc    Get cleaning sessions (roster view for admin)
+ */
+router.get(
+    "/cleaning-sessions",
+    authenticate,
+    authorize("admin"),
+    housekeepingRosterController.getCleaningSessions
+);
+
 export default router;

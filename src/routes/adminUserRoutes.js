@@ -7,6 +7,7 @@ import {
     updateUserStatus,
     updateUser,
     getUserStatistics,
+    getHotelStaffByRole,
 } from "../controllers/admin/userController.js";
 
 const router = express.Router();
@@ -27,6 +28,16 @@ router.use(authorize("admin"));
  * Note: This must come before /:id route to avoid route conflict
  */
 router.get("/statistics", getUserStatistics);
+
+/**
+ * GET /api/admin/users/hotel-staff
+ * Get hotel staff by role (for assignment purposes)
+ * Query params:
+ *   - hotelId: required
+ *   - role: optional (housekeeping|maintenance|receptionist)
+ */
+router.get("/hotel-staff", getHotelStaffByRole);
+
 
 /**
  * GET /api/admin/users

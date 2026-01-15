@@ -26,6 +26,11 @@ const authenticate = async (req, res, next) => {
             role: decoded.role,
         };
 
+        // Include hotelId if present in token (for receptionist/housekeeping)
+        if (decoded.hotelId) {
+            req.user.hotelId = decoded.hotelId;
+        }
+
         next();
     } catch (error) {
         if (error.message === "Invalid or expired token") {

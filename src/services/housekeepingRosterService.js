@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 class HousekeepingRosterService {
     /**
      * Generate daily housekeeping tasks for all rooms in a hotel
+     * ATOMIC: Creates ALL 3 sessions (MORNING, AFTERNOON, EVENING) per room at once
      * @param {string} hotelId - Hotel ID
      * @param {Date} date - Date for which to generate tasks
      * @param {Object} currentUser - Current user making the request
@@ -30,11 +31,11 @@ class HousekeepingRosterService {
             throw new Error("Invalid date format");
         }
 
-        // Get all rooms for the hotel
-        const rooms = await Room.find({ hotelId, isActive: true });
+        // Get ALL rooms for the hotel (regardless of status as per requirements)
+        const rooms = await Room.find({ hotelId });
 
         if (rooms.length === 0) {
-            throw new Error("No active rooms found for this hotel");
+            throw new Error("No rooms found for this hotel");
         }
 
         // Get all housekeeping staff for the hotel
@@ -44,79 +45,127 @@ class HousekeepingRosterService {
             isActive: true,
         });
 
-        const shifts = ["morning", "afternoon", "night"];
-        const tasksCreated = [];
-        const tasksSkipped = [];
+        // All 3 sessions per day
+        const sessions = ["MORNING", "AFTERNOON", "EVENING"];
+        const roomsProcessed = [];
+        const roomsSkipped = [];
 
-        // Generate tasks for each room and each shift
+        // Process each room atomically (all 3 sessions together)
         for (const room of rooms) {
-            for (const shift of shifts) {
-                try {
-                    // Check if task already exists
-                    const existingTask = await HousekeepingRoster.findOne({
-                        hotelId,
-                        room: room._id,
-                        date: taskDate,
-                        shift,
+            try {
+                // Check if ANY session already exists for this room on this date
+                const existingSessions = await HousekeepingRoster.find({
+                    hotelId,
+                    room: room._id,
+                    date: taskDate,
+                });
+
+                if (existingSessions.length > 0) {
+                    roomsSkipped.push({
+                        room: room.roomNumber,
+                        reason: `${existingSessions.length} session(s) already exist`,
+                        existingSessions: existingSessions.map(s => s.session),
                     });
+                    continue;
+                }
 
-                    if (existingTask) {
-                        tasksSkipped.push({
-                            room: room.roomNumber,
-                            shift,
-                            reason: "Task already exists",
-                        });
-                        continue;
-                    }
 
-                    // Assign staff in round-robin fashion
+                // Create all 3 sessions atomically with automatic assignment
+                const sessionsToCreate = [];
+
+                // Calculate current workload for each staff member for fair distribution
+                let staffWorkload = [];
+                if (housekeepingStaff.length > 0) {
+                    staffWorkload = await Promise.all(
+                        housekeepingStaff.map(async (staff) => {
+                            const pendingTasks = await HousekeepingRoster.countDocuments({
+                                hotelId,
+                                assignedTo: staff._id,
+                                date: taskDate,
+                                status: { $in: ["pending", "in_progress"] }
+                            });
+                            return { staffId: staff._id, staffName: staff.name, pendingTasks };
+                        })
+                    );
+                    // Sort by workload (least tasks first)
+                    staffWorkload.sort((a, b) => a.pendingTasks - b.pendingTasks);
+                }
+
+                for (let i = 0; i < sessions.length; i++) {
+                    const session = sessions[i];
+
+                    // Automatically assign to housekeeper with least workload
                     let assignedStaff = null;
-                    if (housekeepingStaff.length > 0) {
-                        const staffIndex = tasksCreated.length % housekeepingStaff.length;
-                        assignedStaff = housekeepingStaff[staffIndex]._id;
+                    let assignedStaffName = null;
+
+                    if (staffWorkload.length > 0) {
+                        // Get staff with least workload and increment their count
+                        const selectedStaff = staffWorkload[0];
+                        assignedStaff = selectedStaff.staffId;
+                        assignedStaffName = selectedStaff.staffName;
+
+                        // Increment workload for next iteration
+                        selectedStaff.pendingTasks++;
+                        // Re-sort to maintain least-workload-first order
+                        staffWorkload.sort((a, b) => a.pendingTasks - b.pendingTasks);
                     }
 
-                    // Create new task
-                    const newTask = new HousekeepingRoster({
+                    sessionsToCreate.push({
                         hotelId,
                         room: room._id,
                         date: taskDate,
-                        shift,
+                        session,
                         assignedTo: assignedStaff,
                         status: "pending",
                         priority: "normal",
                         taskType: "routine",
                     });
+                }
 
-                    await newTask.save();
-                    tasksCreated.push({
+                // Insert all 3 sessions at once (atomic operation)
+                await HousekeepingRoster.insertMany(sessionsToCreate, { ordered: true });
+
+                roomsProcessed.push({
+                    room: room.roomNumber,
+                    roomType: room.roomType,
+                    status: room.status,
+                    sessionsCreated: sessions.length,
+                    autoAssigned: staffWorkload.length > 0,
+                });
+            } catch (error) {
+                // Handle duplicate key errors gracefully
+                if (error.code === 11000) {
+                    roomsSkipped.push({
                         room: room.roomNumber,
-                        shift,
-                        assignedTo: assignedStaff,
+                        reason: "Duplicate session detected (concurrent creation)",
                     });
-                } catch (error) {
-                    // Handle duplicate key errors gracefully
-                    if (error.code === 11000) {
-                        tasksSkipped.push({
-                            room: room.roomNumber,
-                            shift,
-                            reason: "Duplicate task",
-                        });
-                    } else {
-                        throw error;
-                    }
+                } else {
+                    // Log error but continue with other rooms
+                    console.error(`Error creating sessions for room ${room.roomNumber}:`, error.message);
+                    roomsSkipped.push({
+                        room: room.roomNumber,
+                        reason: `Error: ${error.message}`,
+                    });
                 }
             }
         }
 
+
+        const autoAssignedCount = roomsProcessed.filter(r => r.autoAssigned).length;
+
         return {
-            message: "Daily housekeeping tasks generated successfully",
+            message: housekeepingStaff.length > 0
+                ? `Daily housekeeping tasks generated and automatically assigned successfully`
+                : `Daily housekeeping tasks generated successfully (no housekeepers available for auto-assignment)`,
             date: taskDate,
-            tasksCreated: tasksCreated.length,
-            tasksSkipped: tasksSkipped.length,
+            roomsProcessed: roomsProcessed.length,
+            roomsSkipped: roomsSkipped.length,
+            totalSessionsCreated: roomsProcessed.length * 3,
+            autoAssignedRooms: autoAssignedCount,
+            availableHousekeepers: housekeepingStaff.length,
             details: {
-                created: tasksCreated,
-                skipped: tasksSkipped,
+                processed: roomsProcessed,
+                skipped: roomsSkipped,
             },
         };
     }
@@ -179,7 +228,7 @@ class HousekeepingRosterService {
             hotelId,
             room: roomId,
             date: new Date(),
-            shift: this.getCurrentShift(),
+            session: this.getCurrentSession(),
             assignedTo: assignedStaff,
             status: "pending",
             priority: "high",
@@ -199,17 +248,17 @@ class HousekeepingRosterService {
     }
 
     /**
-     * Get current shift based on time of day
-     * @returns {string} Current shift
+     * Get current session based on time of day
+     * @returns {string} Current session
      */
-    getCurrentShift() {
+    getCurrentSession() {
         const hour = new Date().getHours();
         if (hour >= 6 && hour < 14) {
-            return "morning";
+            return "MORNING";
         } else if (hour >= 14 && hour < 22) {
-            return "afternoon";
+            return "AFTERNOON";
         } else {
-            return "night";
+            return "EVENING";
         }
     }
 
@@ -217,7 +266,7 @@ class HousekeepingRosterService {
      * Get housekeeping tasks for a specific date
      * @param {string} hotelId - Hotel ID (optional for admin, required for housekeeping)
      * @param {Date} date - Date
-     * @param {Object} filters - Optional filters (shift, status, assignedTo)
+     * @param {Object} filters - Optional filters (session, status, assignedTo)
      * @param {Object} currentUser - Current user making the request
      * @returns {Array} Housekeeping tasks
      */
@@ -250,8 +299,8 @@ class HousekeepingRosterService {
         }
 
         // Apply filters
-        if (filters.shift) {
-            query.shift = filters.shift;
+        if (filters.session) {
+            query.session = filters.session;
         }
         if (filters.status) {
             query.status = filters.status;
@@ -263,7 +312,7 @@ class HousekeepingRosterService {
         const tasks = await HousekeepingRoster.find(query)
             .populate("room", "roomNumber roomType")
             .populate("assignedTo", "name email role")
-            .sort({ shift: 1, priority: -1 });
+            .sort({ session: 1, priority: -1 });
 
         return tasks.map((task) => task.toJSON());
     }
@@ -374,7 +423,7 @@ class HousekeepingRosterService {
     /**
      * Get my tasks (for housekeeping staff)
      * @param {Object} currentUser - Current user making the request
-     * @param {Object} filters - Optional filters (date, shift, status)
+     * @param {Object} filters - Optional filters (date, session, status)
      * @returns {Array} Assigned tasks
      */
     async getMyTasks(currentUser, filters = {}) {
@@ -384,7 +433,7 @@ class HousekeepingRosterService {
 
         const query = {
             hotelId: currentUser.hotelId,
-            assignedTo: currentUser.id,
+            assignedTo: currentUser._id || currentUser.id,
         };
 
         // Apply filters
@@ -401,8 +450,8 @@ class HousekeepingRosterService {
             query.date = today;
         }
 
-        if (filters.shift) {
-            query.shift = filters.shift;
+        if (filters.session) {
+            query.session = filters.session;
         }
         if (filters.status) {
             query.status = filters.status;
@@ -410,9 +459,61 @@ class HousekeepingRosterService {
 
         const tasks = await HousekeepingRoster.find(query)
             .populate("room", "roomNumber roomType")
-            .sort({ shift: 1, priority: -1 });
+            .sort({ session: 1, priority: -1 });
 
         return tasks.map((task) => task.toJSON());
+    }
+
+    /**
+     * Get cleaning sessions (roster view for admin)
+     * @param {string} hotelId - Hotel ID
+     * @param {Date} date - Date
+     * @param {Object} filters - Optional filters (session, status, roomId)
+     * @param {Object} currentUser - Current user making the request
+     * @returns {Array} Cleaning sessions with room and staff details
+     */
+    async getCleaningSessions(hotelId, date, filters = {}, currentUser) {
+        // Only admin can access roster view
+        if (currentUser.role !== "admin") {
+            throw new Error("Only admin can access cleaning roster");
+        }
+
+        // Validate hotelId
+        if (!mongoose.Types.ObjectId.isValid(hotelId)) {
+            throw new Error("Invalid hotel ID");
+        }
+
+        // Parse date (default to today)
+        const taskDate = date ? new Date(date) : new Date();
+        taskDate.setHours(0, 0, 0, 0);
+
+        if (isNaN(taskDate.getTime())) {
+            throw new Error("Invalid date format");
+        }
+
+        const query = {
+            hotelId,
+            date: taskDate,
+        };
+
+        // Apply filters
+        if (filters.session) {
+            query.session = filters.session;
+        }
+        if (filters.status) {
+            query.status = filters.status;
+        }
+        if (filters.roomId) {
+            query.room = filters.roomId;
+        }
+
+        const sessions = await HousekeepingRoster.find(query)
+            .populate("room", "roomNumber roomType status")
+            .populate("assignedTo", "name email role")
+            .populate("hotelId", "name code")
+            .sort({ "room.roomNumber": 1, session: 1 });
+
+        return sessions.map((session) => session.toJSON());
     }
 }
 

@@ -321,7 +321,18 @@ class BookingService {
             // Guests can only see their own bookings (guest bookings only)
             query.guest = currentUser.id;
         } else if (currentUser.role === "receptionist" || currentUser.role === "admin") {
-            // Receptionist and admin can see all bookings (both guest and walk-in)
+            // Receptionist: only see bookings from their assigned hotel
+            // Admin: see all bookings (no hotel filter)
+            if (currentUser.role === "receptionist") {
+                // Filter by receptionist's hotel
+                if (currentUser.hotelId) {
+                    query.hotelId = currentUser.hotelId;
+                } else {
+                    // If receptionist has no hotel assigned, return empty results
+                    throw new Error("Receptionist must be assigned to a hotel");
+                }
+            }
+
             // Apply optional filters
             if (filters.guestId) {
                 // Filter by guest ID (only guest bookings)

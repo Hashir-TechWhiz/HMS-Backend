@@ -28,11 +28,11 @@ class HousekeepingRosterController {
      */
     async getTasksByDate(req, res, next) {
         try {
-            const { hotelId, date, shift, status, assignedTo } = req.query;
+            const { hotelId, date, session, status, assignedTo } = req.query;
             const currentUser = req.user;
             const taskDate = date || new Date();
 
-            const filters = { shift, status, assignedTo };
+            const filters = { session, status, assignedTo };
             const tasks = await housekeepingRosterService.getTasksByDate(hotelId, taskDate, filters, currentUser);
 
             res.status(200).json({
@@ -51,10 +51,10 @@ class HousekeepingRosterController {
      */
     async getMyTasks(req, res, next) {
         try {
-            const { date, shift, status } = req.query;
+            const { date, session, status } = req.query;
             const currentUser = req.user;
 
-            const filters = { date, shift, status };
+            const filters = { date, session, status };
             const tasks = await housekeepingRosterService.getMyTasks(currentUser, filters);
 
             res.status(200).json({
@@ -105,6 +105,28 @@ class HousekeepingRosterController {
                 success: true,
                 message: "Task assigned successfully",
                 data: task,
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Get cleaning sessions (roster view)
+     * GET /api/housekeeping/cleaning-sessions
+     */
+    async getCleaningSessions(req, res, next) {
+        try {
+            const { hotelId, date, session, status, roomId } = req.query;
+            const currentUser = req.user;
+
+            const filters = { session, status, roomId };
+            const sessions = await housekeepingRosterService.getCleaningSessions(hotelId, date, filters, currentUser);
+
+            res.status(200).json({
+                success: true,
+                count: sessions.length,
+                data: sessions,
             });
         } catch (error) {
             next(error);

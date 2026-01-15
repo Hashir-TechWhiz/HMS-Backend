@@ -32,13 +32,13 @@ const housekeepingRosterSchema = new mongoose.Schema(
             type: Date,
             required: [true, "Date is required"],
         },
-        shift: {
+        session: {
             type: String,
             enum: {
-                values: ["morning", "afternoon", "night"],
-                message: "{VALUE} is not a valid shift",
+                values: ["MORNING", "AFTERNOON", "EVENING"],
+                message: "{VALUE} is not a valid session",
             },
-            required: [true, "Shift is required"],
+            required: [true, "Session is required"],
         },
         assignedTo: {
             type: mongoose.Schema.Types.ObjectId,
@@ -97,13 +97,13 @@ const housekeepingRosterSchema = new mongoose.Schema(
 housekeepingRosterSchema.index({ hotelId: 1 });
 housekeepingRosterSchema.index({ hotelId: 1, room: 1 });
 housekeepingRosterSchema.index({ hotelId: 1, date: 1 });
-housekeepingRosterSchema.index({ hotelId: 1, shift: 1 });
+housekeepingRosterSchema.index({ hotelId: 1, session: 1 });
 housekeepingRosterSchema.index({ hotelId: 1, assignedTo: 1 });
 housekeepingRosterSchema.index({ hotelId: 1, status: 1 });
-housekeepingRosterSchema.index({ hotelId: 1, date: 1, shift: 1 });
+housekeepingRosterSchema.index({ hotelId: 1, date: 1, session: 1 });
 
-// Compound unique index - one task per room per shift per day
-housekeepingRosterSchema.index({ hotelId: 1, room: 1, date: 1, shift: 1 }, { unique: true });
+// Compound unique index - one task per room per session per day
+housekeepingRosterSchema.index({ hotelId: 1, room: 1, date: 1, session: 1 }, { unique: true });
 
 // Compound index for assigned tasks
 housekeepingRosterSchema.index({ hotelId: 1, assignedTo: 1, date: 1, status: 1 });

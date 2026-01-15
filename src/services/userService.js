@@ -217,11 +217,47 @@ const getUserStatistics = async () => {
     }
 };
 
+/**
+ * Get hotel staff by role (for assignment purposes)
+ * @param {string} hotelId - Hotel ID
+ * @param {string} role - Staff role (housekeeping, maintenance, etc.)
+ * @returns {Array} Staff members
+ */
+const getHotelStaffByRole = async (hotelId, role) => {
+    try {
+        if (!hotelId) {
+            throw new Error("Hotel ID is required");
+        }
+
+        const query = {
+            hotelId,
+            isActive: true,
+        };
+
+        if (role) {
+            const validRoles = ["housekeeping", "maintenance", "receptionist"];
+            if (!validRoles.includes(role)) {
+                throw new Error(`Invalid role. Must be one of: ${validRoles.join(", ")}`);
+            }
+            query.role = role;
+        }
+
+        const staff = await User.find(query)
+            .select("_id name email role")
+            .sort({ name: 1 });
+
+        return staff;
+    } catch (error) {
+        throw error;
+    }
+};
+
 export default {
     getAllUsers,
     getUserById,
     updateUserStatus,
     updateUser,
     getUserStatistics,
+    getHotelStaffByRole,
 };
 
