@@ -38,9 +38,15 @@ class InvoiceService {
             throw new Error("Booking not found");
         }
 
-        // Check if booking is completed
-        if (booking.status !== "completed") {
-            throw new Error("Invoice can only be generated for completed bookings");
+        // Check if booking is checked-in (Option A: Invoice generated DURING checkout, not after)
+        if (booking.status !== "checkedin") {
+            if (booking.status === "completed") {
+                throw new Error("Invoice has already been generated for this booking");
+            } else if (booking.status === "confirmed") {
+                throw new Error("Cannot generate invoice. Booking must be checked-in first");
+            } else {
+                throw new Error(`Cannot generate invoice for bookings with status: ${booking.status}`);
+            }
         }
 
         // Check if invoice already exists for this booking

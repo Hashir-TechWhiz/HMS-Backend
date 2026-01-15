@@ -53,6 +53,20 @@ class ServiceRequestService {
             }
         }
 
+        // Check for duplicate service requests (same type, pending or in_progress)
+        // Only apply this check for guests to prevent spamming
+        if (currentUser.role === "guest") {
+            const existingRequest = await ServiceRequest.findOne({
+                requestedBy: currentUser.id,
+                serviceType: serviceType,
+                status: { $in: ["pending", "in_progress"] }
+            });
+
+            if (existingRequest) {
+                throw new Error(`You already have a ${serviceType.replace(/_/g, ' ')} request that is pending or in progress. Please wait for it to be completed before submitting a new request of the same type.`);
+            }
+        }
+
         // Get room from booking
         const roomId = booking.room._id || booking.room;
 
