@@ -1,4 +1,5 @@
 import Booking from "../models/Booking.js";
+import PublicFacilityBooking from "../models/PublicFacilityBooking.js";
 import Room from "../models/Room.js";
 import mongoose from "mongoose";
 
@@ -58,13 +59,20 @@ class PaymentService {
     }
 
     /**
-     * Add payment to a booking
+     * Add payment to a booking (supports both room and facility bookings)
      * @param {string} bookingId - Booking ID
-     * @param {Object} paymentData - Payment data (amount, paymentMethod, transactionId, notes)
+     * @param {Object} paymentData - Payment data (amount, paymentMethod, transactionId, notes, bookingType)
      * @param {Object} currentUser - Current user making the payment
      * @returns {Object} Updated booking
      */
     async addPayment(bookingId, paymentData, currentUser) {
+        const bookingType = paymentData.bookingType || "room"; // Default to room booking for backward compatibility
+        
+        if (bookingType === "facility") {
+            return await this.addFacilityPayment(bookingId, paymentData, currentUser);
+        }
+        
+        // Original room booking payment logic follows
         // Validate ObjectId
         if (!mongoose.Types.ObjectId.isValid(bookingId)) {
             throw new Error("Invalid booking ID");
@@ -537,6 +545,185 @@ class PaymentService {
                 currentPage: page,
                 limit,
             },
+        };
+    }
+
+    /**
+     * Add payment to a facility booking
+     * @param {string} bookingId - Facility Booking ID
+     * @param {Object} paymentData - Payment data
+     * @param {Object} currentUser - Current user
+     * @returns {Object} Updated booking
+     */
+    async addFacilityPayment(bookingId, paymentData, currentUser) {
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+
+        // Validate payment data
+        const { amount, paymentMethod, transactionId, notes } = paymentData;
+
+        if (!amount || amount <= 0) {
+            throw new Error("Payment amount must be greater than 0");
+        }
+
+        if (!paymentMethod || !["card", "cash"].includes(paymentMethod)) {
+            throw new Error("Payment method must be either 'card' or 'cash'");
+        }
+
+        // Find facility booking
+        const booking = await PublicFacilityBooking.findById(bookingId)
+            .populate("facility", "name facilityType pricePerHour pricePerDay")
+            .populate("guest", "name email");
+
+        if (!booking) {
+            throw new Error("Facility booking not found");
+        }
+
+        // Authorization check
+        if (currentUser.role === "guest") {
+            if (!booking.guest || booking.guest._id.toString() !== currentUser.id) {
+                throw new Error("You can only add payments to your own bookings");
+            }
+        } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
+            throw new Error("Unauthorized to add payments");
+        }
+
+        // Check if booking is cancelled
+        if (booking.status === "cancelled") {
+            throw new Error("Cannot add payment to a cancelled booking");
+        }
+
+        // Check if payment exceeds remaining balance
+        const remainingBalance = booking.totalAmount - (booking.totalPaid || 0);
+
+        if (amount > remainingBalance) {
+            throw new Error(`Payment amount (${amount}) exceeds remaining balance (${remainingBalance})`);
+        }
+
+        // Create payment record
+        const payment = {
+            amount,
+            paymentMethod,
+            paymentDate: new Date(),
+            processedBy: currentUser.id,
+            transactionId: transactionId || null,
+            notes: notes || null,
+        };
+
+        // Add payment to booking
+        booking.payments.push(payment);
+        booking.totalPaid = (booking.totalPaid || 0) + amount;
+
+        // Update payment status
+        this.updatePaymentStatus(booking);
+
+        await booking.save();
+
+        // Populate the processedBy field for the new payment
+        await booking.populate("payments.processedBy", "name email role");
+
+        return booking.toJSON();
+    }
+
+    /**
+     * Get all payments for a facility booking
+     * @param {string} bookingId - Facility Booking ID
+     * @param {Object} currentUser - Current user
+     * @returns {Object} Booking with payments
+     */
+    async getFacilityBookingPayments(bookingId, currentUser) {
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+
+        const booking = await PublicFacilityBooking.findById(bookingId)
+            .populate("facility", "name facilityType pricePerHour pricePerDay")
+            .populate("guest", "name email")
+            .populate("payments.processedBy", "name email role");
+
+        if (!booking) {
+            throw new Error("Facility booking not found");
+        }
+
+        // Authorization check
+        if (currentUser.role === "guest") {
+            if (!booking.guest || booking.guest._id.toString() !== currentUser.id) {
+                throw new Error("You can only view payments for your own bookings");
+            }
+        } else if (currentUser.role === "receptionist") {
+            if (currentUser.hotelId && booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("You can only view payments for bookings in your hotel");
+            }
+        } else if (currentUser.role !== "admin") {
+            throw new Error("Unauthorized to view payments");
+        }
+
+        return {
+            bookingId: booking._id,
+            bookingStatus: booking.status,
+            facility: booking.facility,
+            guest: booking.guest,
+            customerDetails: booking.customerDetails,
+            startDate: booking.startDate,
+            endDate: booking.endDate,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            facilityCharges: booking.facilityCharges,
+            serviceCharges: booking.serviceCharges,
+            totalAmount: booking.totalAmount,
+            totalPaid: booking.totalPaid,
+            balance: booking.totalAmount - (booking.totalPaid || 0),
+            paymentStatus: booking.paymentStatus,
+            payments: booking.payments,
+        };
+    }
+
+    /**
+     * Get balance for a facility booking
+     * @param {string} bookingId - Facility Booking ID
+     * @param {Object} currentUser - Current user
+     * @returns {Object} Balance information
+     */
+    async getFacilityBookingBalance(bookingId, currentUser) {
+        // Validate ObjectId
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            throw new Error("Invalid booking ID");
+        }
+
+        const booking = await PublicFacilityBooking.findById(bookingId)
+            .populate("facility", "name facilityType pricePerHour pricePerDay")
+            .populate("guest", "name email");
+
+        if (!booking) {
+            throw new Error("Facility booking not found");
+        }
+
+        // Authorization check
+        if (currentUser.role === "guest") {
+            if (!booking.guest || booking.guest._id.toString() !== currentUser.id) {
+                throw new Error("You can only view balance for your own bookings");
+            }
+        } else if (currentUser.role === "receptionist") {
+            if (currentUser.hotelId && booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("You can only view balance for bookings in your hotel");
+            }
+        } else if (currentUser.role !== "admin") {
+            throw new Error("Unauthorized to view balance");
+        }
+
+        const balance = booking.totalAmount - (booking.totalPaid || 0);
+
+        return {
+            bookingId: booking._id,
+            facilityCharges: booking.facilityCharges,
+            serviceCharges: booking.serviceCharges,
+            totalAmount: booking.totalAmount,
+            totalPaid: booking.totalPaid,
+            balance,
+            paymentStatus: booking.paymentStatus,
         };
     }
 }

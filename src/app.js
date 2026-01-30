@@ -11,6 +11,8 @@ import hotelRoutes from "./routes/hotelRoutes.js";
 import invoiceRoutes from "./routes/invoiceRoutes.js";
 import rosterRoutes from "./routes/rosterRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import publicFacilityRoutes from "./routes/publicFacilityRoutes.js";
+import publicFacilityBookingRoutes from "./routes/publicFacilityBookingRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -42,6 +44,8 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/rosters", rosterRoutes);
 app.use("/api/admin/users", adminUserRoutes);
+app.use("/api/public-facilities", publicFacilityRoutes);
+app.use("/api/public-facility-bookings", publicFacilityBookingRoutes);
 
 // 404 handler for unknown routes
 app.use((req, res) => {

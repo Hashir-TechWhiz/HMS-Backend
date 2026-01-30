@@ -138,3 +138,53 @@ export const getAllPayments = async (req, res) => {
         });
     }
 };
+
+/**
+ * Get all payments for a facility booking
+ * @route GET /api/payments/facility-bookings/:bookingId/payments
+ * @access Private (Guest, Receptionist, Admin)
+ */
+export const getFacilityBookingPayments = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const currentUser = req.user;
+
+        const payments = await paymentService.getFacilityBookingPayments(bookingId, currentUser);
+
+        res.status(200).json({
+            success: true,
+            data: payments,
+        });
+    } catch (error) {
+        console.error("Error getting facility booking payments:", error.message);
+        res.status(400).json({
+            success: false,
+            message: error.message || "Failed to get facility booking payments",
+        });
+    }
+};
+
+/**
+ * Get balance for a facility booking
+ * @route GET /api/payments/facility-bookings/:bookingId/balance
+ * @access Private (Guest, Receptionist, Admin)
+ */
+export const getFacilityBookingBalance = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const currentUser = req.user;
+
+        const balance = await paymentService.getFacilityBookingBalance(bookingId, currentUser);
+
+        res.status(200).json({
+            success: true,
+            data: balance,
+        });
+    } catch (error) {
+        console.error("Error getting facility booking balance:", error.message);
+        res.status(400).json({
+            success: false,
+            message: error.message || "Failed to get facility booking balance",
+        });
+    }
+};
