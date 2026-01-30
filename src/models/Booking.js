@@ -164,6 +164,73 @@ const bookingSchema = new mongoose.Schema(
                 required: false,
             },
         },
+        // Payment tracking
+        paymentStatus: {
+            type: String,
+            enum: {
+                values: ["unpaid", "partially_paid", "paid"],
+                message: "{VALUE} is not a valid payment status",
+            },
+            default: "unpaid",
+        },
+        payments: [
+            {
+                amount: {
+                    type: Number,
+                    required: true,
+                    min: [0, "Payment amount cannot be negative"],
+                },
+                paymentMethod: {
+                    type: String,
+                    enum: {
+                        values: ["card", "cash"],
+                        message: "{VALUE} is not a valid payment method",
+                    },
+                    required: true,
+                },
+                paymentDate: {
+                    type: Date,
+                    default: Date.now,
+                },
+                processedBy: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                    required: false,
+                },
+                transactionId: {
+                    type: String,
+                    required: false,
+                    trim: true,
+                },
+                notes: {
+                    type: String,
+                    required: false,
+                    trim: true,
+                },
+            },
+        ],
+        totalPaid: {
+            type: Number,
+            default: 0,
+            min: [0, "Total paid cannot be negative"],
+        },
+        roomCharges: {
+            type: Number,
+            required: false,
+            default: 0,
+            min: [0, "Room charges cannot be negative"],
+        },
+        serviceCharges: {
+            type: Number,
+            required: false,
+            default: 0,
+            min: [0, "Service charges cannot be negative"],
+        },
+        totalAmount: {
+            type: Number,
+            required: false,
+            min: [0, "Total amount cannot be negative"],
+        },
     },
     {
         timestamps: true,

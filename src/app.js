@@ -10,6 +10,7 @@ import adminUserRoutes from "./routes/adminUserRoutes.js";
 import hotelRoutes from "./routes/hotelRoutes.js";
 import invoiceRoutes from "./routes/invoiceRoutes.js";
 import rosterRoutes from "./routes/rosterRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
 import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
@@ -37,6 +38,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/service-requests", serviceRequestRoutes);
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/payments", paymentRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/rosters", rosterRoutes);
 app.use("/api/admin/users", adminUserRoutes);

@@ -539,7 +539,51 @@ class ServiceRequestService {
             }
         }
 
+        // IMPORTANT: Save service request FIRST before updating booking
         await serviceRequest.save();
+
+        // Update booking service charges when service request is completed
+        if (newStatus === "completed") {
+            const booking = await Booking.findById(serviceRequest.booking);
+            if (booking) {
+                // Recalculate service charges from all completed service requests
+                // Now this will include the service we just marked as complete
+                const completedServices = await ServiceRequest.find({
+                    booking: serviceRequest.booking,
+                    status: "completed"
+                });
+
+                const totalServiceCharges = completedServices.reduce((sum, sr) => {
+                    const price = sr.finalPrice || sr.fixedPrice || 0;
+                    return sum + price;
+                }, 0);
+
+                console.log(`[Payment Update] Booking ${booking._id}:`);
+                console.log(`  - Room Charges: ${booking.roomCharges || 0}`);
+                console.log(`  - Completed Services: ${completedServices.length}`);
+                console.log(`  - Total Service Charges: ${totalServiceCharges}`);
+                console.log(`  - New Total Amount: ${(booking.roomCharges || 0) + totalServiceCharges}`);
+                console.log(`  - Total Paid: ${booking.totalPaid || 0}`);
+
+                // Update booking's service charges and total amount
+                booking.serviceCharges = totalServiceCharges;
+                booking.totalAmount = (booking.roomCharges || 0) + totalServiceCharges;
+
+                // Update payment status based on new total
+                const totalPaid = booking.totalPaid || 0;
+                if (totalPaid === 0) {
+                    booking.paymentStatus = "unpaid";
+                } else if (totalPaid >= booking.totalAmount) {
+                    booking.paymentStatus = "paid";
+                } else {
+                    booking.paymentStatus = "partially_paid";
+                }
+
+                console.log(`  - New Payment Status: ${booking.paymentStatus}`);
+
+                await booking.save();
+            }
+        }
 
         // Re-populate after save
         await serviceRequest.populate([
