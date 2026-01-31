@@ -44,7 +44,7 @@ const publicFacilitySchema = new mongoose.Schema(
         },
         pricePerHour: {
             type: Number,
-            required: [true, "Price per hour is required"],
+            required: false,
             min: [0, "Price per hour cannot be negative"],
         },
         pricePerDay: {
@@ -83,26 +83,28 @@ const publicFacilitySchema = new mongoose.Schema(
             ],
         },
         operatingHours: {
-            start: {
+            open: {
                 type: String,
-                required: [true, "Operating start time is required"],
+                required: false,
                 validate: {
                     validator: function (value) {
-                        // Validate time format HH:MM (24-hour format)
+                        // Validate time format HH:MM (24-hour format) only if value is provided
+                        if (!value) return true;
                         return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(value);
                     },
-                    message: "Operating start time must be in HH:MM format",
+                    message: "Operating open time must be in HH:MM format",
                 },
             },
-            end: {
+            close: {
                 type: String,
-                required: [true, "Operating end time is required"],
+                required: false,
                 validate: {
                     validator: function (value) {
-                        // Validate time format HH:MM (24-hour format)
+                        // Validate time format HH:MM (24-hour format) only if value is provided
+                        if (!value) return true;
                         return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(value);
                     },
-                    message: "Operating end time must be in HH:MM format",
+                    message: "Operating close time must be in HH:MM format",
                 },
             },
         },

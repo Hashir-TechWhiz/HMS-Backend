@@ -836,9 +836,9 @@ class BookingService {
         }
 
         // Validate required fields
-        const { nicPassport, nationality, phoneNumber, country, visaDetails } = checkInData;
-        if (!nicPassport || !nationality || !phoneNumber || !country) {
-            throw new Error("NIC/Passport, Nationality, Phone Number, and Country are required for check-in");
+        const { nicPassport, phoneNumber, country } = checkInData;
+        if (!nicPassport || !phoneNumber || !country) {
+            throw new Error("NIC/Passport, Phone Number, and Country are required for check-in");
         }
 
         // Update booking status and details
@@ -846,10 +846,8 @@ class BookingService {
         booking.isCheckedIn = true;
         booking.checkInDetails = {
             nicPassport,
-            nationality,
             phoneNumber,
             country,
-            visaDetails: visaDetails || "",
             checkedInAt: new Date(),
             checkedInBy: currentUser.id,
         };

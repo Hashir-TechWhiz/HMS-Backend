@@ -59,7 +59,7 @@ const rosterSchema = new mongoose.Schema(
         shiftType: {
             type: String,
             enum: {
-                values: ["morning", "afternoon", "evening", "night"],
+                values: ["morning", "afternoon", "night"],
                 message: "{VALUE} is not a valid shift type",
             },
             required: [true, "Shift type is required"],
