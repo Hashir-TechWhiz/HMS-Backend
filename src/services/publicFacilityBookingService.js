@@ -147,8 +147,14 @@ class PublicFacilityBookingService {
      */
     async createBooking(bookingData, currentUser) {
         try {
+            // Handle both 'facility' and 'facilityId' field names for compatibility
+            const facilityId = bookingData.facilityId || bookingData.facility;
+            if (!facilityId) {
+                throw new Error("Facility ID is required");
+            }
+
             // Validate facility exists
-            const facility = await PublicFacility.findById(bookingData.facility);
+            const facility = await PublicFacility.findById(facilityId);
             if (!facility) {
                 throw new Error("Facility not found");
             }
@@ -157,12 +163,29 @@ class PublicFacilityBookingService {
                 throw new Error("Facility is not available for booking");
             }
 
-            // Check capacity
-            if (bookingData.numberOfGuests > facility.capacity) {
+            // Handle date fields - convert bookingDate to startDate/endDate for hourly bookings
+            if (bookingData.bookingType === "hourly" && bookingData.bookingDate && !bookingData.startDate) {
+                bookingData.startDate = bookingData.bookingDate;
+                bookingData.endDate = bookingData.bookingDate;
+            }
+
+            // Validate required date fields
+            if (!bookingData.startDate || !bookingData.endDate) {
+                throw new Error("Start date and end date are required");
+            }
+
+            // Check capacity if numberOfGuests is provided
+            if (bookingData.numberOfGuests && bookingData.numberOfGuests > facility.capacity) {
                 throw new Error(`Number of guests exceeds facility capacity of ${facility.capacity}`);
             }
 
-            // Set hotelId from facility
+            // Set default numberOfGuests if not provided
+            if (!bookingData.numberOfGuests) {
+                bookingData.numberOfGuests = 1;
+            }
+
+            // Set facility reference and hotelId
+            bookingData.facility = facilityId;
             bookingData.hotelId = facility.hotelId;
 
             // Role-based logic
@@ -172,7 +195,7 @@ class PublicFacilityBookingService {
                 bookingData.createdBy = currentUser._id;
                 bookingData.customerDetails = {
                     name: currentUser.name,
-                    phone: currentUser.phone,
+                    phone: currentUser.phone || currentUser.email || "N/A",
                     email: currentUser.email,
                 };
             } else if (["receptionist", "admin"].includes(currentUser.role)) {
@@ -187,7 +210,7 @@ class PublicFacilityBookingService {
                     }
                     bookingData.customerDetails = {
                         name: guest.name,
-                        phone: guest.phone,
+                        phone: guest.phone || guest.email || "N/A",
                         email: guest.email,
                     };
                 } else if (bookingData.customerDetails) {

@@ -117,5 +117,17 @@ router.get(
     reportController.getDetailedGuestReport
 );
 
+/**
+ * @route   GET /api/reports/revenue/detailed
+ * @desc    Get detailed revenue report with pagination
+ * @access  Private (Admin, Receptionist only)
+ */
+router.get(
+    "/revenue/detailed",
+    authenticate,
+    authorize("admin", "receptionist"),
+    reportController.getDetailedRevenueReport
+);
+
 export default router;
 

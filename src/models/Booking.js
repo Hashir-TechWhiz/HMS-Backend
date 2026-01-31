@@ -118,22 +118,12 @@ const bookingSchema = new mongoose.Schema(
                 required: false,
                 trim: true,
             },
-            nationality: {
-                type: String,
-                required: false,
-                trim: true,
-            },
             phoneNumber: {
                 type: String,
                 required: false,
                 trim: true,
             },
             country: {
-                type: String,
-                required: false,
-                trim: true,
-            },
-            visaDetails: {
                 type: String,
                 required: false,
                 trim: true,
