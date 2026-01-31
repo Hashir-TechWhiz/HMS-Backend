@@ -104,6 +104,10 @@ class PaymentService {
             if (!booking.guest || booking.guest._id.toString() !== currentUser.id) {
                 throw new Error("You can only add payments to your own bookings");
             }
+            // Guests can only use card payment (cash payment is staff-only)
+            if (paymentMethod === "cash") {
+                throw new Error("Cash payment is not available for guest checkout. Please use card payment.");
+            }
         } else if (currentUser.role !== "receptionist" && currentUser.role !== "admin") {
             throw new Error("Unauthorized to add payments");
         }
