@@ -4,6 +4,107 @@ A comprehensive backend API for hotel management operations including room manag
 
 -----------------------------------------------
 
+## Features
+
+The system currently supports the following core hotel management features:
+
+#### Authentication & User Management
+- User registration (guest self-signup)
+- Login and logout with JWT authentication
+- Password reset via email OTP verification
+- Role-based access control (guest, receptionist, housekeeping, admin)
+- User profile management
+- Admin-managed user accounts (create, update, activate/deactivate)
+
+#### Multi-Hotel/Branch Support
+- Multiple hotel/branch management
+- Hotel creation, updates, and deletion
+- Hotel status management (active/inactive)
+- Hotel-specific operations and data isolation
+
+#### Room Management
+- Create, update, and delete rooms
+- Room type management (standard, deluxe, suite, presidential)
+- Room status tracking (available, occupied, maintenance)
+- Room pricing and capacity management
+- Room amenities and image management
+
+#### Booking Management
+- Guest and walk-in booking creation
+- Booking status lifecycle (pending, confirmed, cancelled)
+- Booking cancellation with automated email notifications
+- Check-in and check-out operations
+- Booking filters by status, guest, room, and date range
+- Booking history and pagination
+
+#### Operations Hub
+- Staff-assisted guest check-in with ID verification
+- Staff-managed checkout with invoice generation
+- Operational views: arrivals, in-house guests, departures
+- Booking status updates and tracking
+
+#### Service Requests
+- Multiple service types (housekeeping, room service, maintenance, laundry, spa, gym access, etc.)
+- Service catalog with customizable pricing per hotel
+- Guest service request creation and tracking
+- Staff assignment and workload management
+- Service request status tracking (pending, in_progress, completed)
+- Role-based service assignment (housekeeping, maintenance)
+
+#### Invoice Management
+- Automatic invoice generation at checkout
+- Invoice number generation with date-based sequences
+- Room charges and service charges calculation
+- Tax calculation and grand total computation
+- PDF invoice generation and download
+- Invoice email delivery
+- Payment status tracking (pending, paid, partially_paid, refunded)
+
+#### Staff Roster Management
+- Staff shift scheduling (morning, afternoon, evening, night)
+- Shift assignment for receptionists and housekeeping
+- Roster viewing for staff members
+- Date range filtering and shift management
+- Overlap prevention for staff shifts
+
+#### Reports & Analytics
+- Booking summary reports (total, by status)
+- Room occupancy reports (by status and type)
+- Service request overview (by status and type)
+- User statistics (total users, active users, by role)
+- Dashboard KPIs and metrics
+
+#### Email Notifications
+- Booking confirmation emails
+- Booking cancellation emails
+- Password reset OTP emails
+- Invoice delivery emails
+
+### Features Not Yet Implemented
+
+The following core modules are planned for future development but are not currently implemented:
+
+#### Shared Facilities Management
+The system does not yet support management of shared hotel facilities such as:
+- Banquet halls and event spaces
+- Conference and meeting rooms
+- Swimming pool
+- Gym and fitness center
+- Restaurant and dining areas
+- Spa and wellness facilities
+
+#### Facility Booking & Allocation
+The system does not provide features for:
+- Booking shared facilities by guests or event organizers
+- Facility availability checking and scheduling
+- Facility-specific pricing and packages
+- Capacity management for shared spaces
+- Facility allocation and conflict resolution
+
+**Note**: The current system includes service requests for guest services (such as "gym access" or "spa" services), which are individual service requests fulfilled by staff. This is different from a full facility management system where facilities are treated as bookable resources with schedules, capacity limits, and dedicated allocation management.
+
+-----------------------------------------------
+
 ## User Roles & Permissions
 
 ### Guest

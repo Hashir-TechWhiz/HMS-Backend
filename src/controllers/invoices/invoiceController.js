@@ -50,10 +50,7 @@ class InvoiceController {
             const { invoiceId } = req.params;
             const currentUser = req.user;
 
-            const pdfBuffer = await invoiceService.downloadInvoicePDF(invoiceId, currentUser);
-
-            // Get invoice for filename
-            const invoice = await invoiceService.getInvoiceByNumber(invoiceId, currentUser);
+            const { pdfBuffer, invoice } = await invoiceService.downloadInvoicePDF(invoiceId, currentUser);
 
             res.setHeader("Content-Type", "application/pdf");
             res.setHeader("Content-Disposition", `attachment; filename=Invoice-${invoice.invoiceNumber}.pdf`);
@@ -117,8 +114,10 @@ class InvoiceController {
 
             res.status(200).json({
                 success: true,
-                data: result.invoices,
-                pagination: result.pagination,
+                data: {
+                    invoices: result.invoices,
+                    pagination: result.pagination,
+                },
             });
         } catch (error) {
             next(error);

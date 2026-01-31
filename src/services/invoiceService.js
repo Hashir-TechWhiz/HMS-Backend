@@ -38,6 +38,16 @@ class InvoiceService {
             throw new Error("Booking not found");
         }
 
+        // Authorization check - Receptionist can only generate invoices for their hotel's bookings
+        if (currentUser.role === "receptionist") {
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId._id.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only generate invoices for bookings from your assigned hotel");
+            }
+        }
+
         // Check if booking is checked-in (Option A: Invoice generated DURING checkout, not after)
         if (booking.status !== "checkedin") {
             if (booking.status === "completed") {
@@ -123,7 +133,7 @@ class InvoiceService {
             // Walk-in customer
             guestDetails = {
                 name: booking.customerDetails.name,
-                email: booking.customerDetails.email,
+                email: booking.customerDetails.email || null, // Email is optional for walk-ins
                 phone: booking.customerDetails.phone || "",
             };
         }
@@ -199,6 +209,14 @@ class InvoiceService {
             if (invoice.guest && invoice.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view your own invoices");
             }
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only view invoices for their hotel's bookings
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view invoices for bookings from your assigned hotel");
+            }
         }
 
         return invoice.toJSON();
@@ -221,6 +239,14 @@ class InvoiceService {
         if (currentUser.role === "guest") {
             if (invoice.guest && invoice.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view your own invoices");
+            }
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only view invoices for their hotel's bookings
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view invoices for bookings from your assigned hotel");
             }
         }
 
@@ -245,41 +271,47 @@ class InvoiceService {
         // Generate PDF
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        // Send email with PDF attachment
-        const mailOptions = {
-            from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
-            to: invoice.guestDetails.email,
-            subject: `Invoice ${invoice.invoiceNumber} - ${invoice.hotelDetails.name}`,
-            html: invoiceEmailTemplate(invoice),
-            attachments: [
-                {
-                    filename: `Invoice-${invoice.invoiceNumber}.pdf`,
-                    content: pdfBuffer,
-                    contentType: "application/pdf",
-                },
-            ],
-        };
+        // Only send email if guest has an email address
+        if (invoice.guestDetails.email) {
+            // Send email with PDF attachment
+            const mailOptions = {
+                from: `"Hotel Management System" <${process.env.SMTP_USER}>`,
+                to: invoice.guestDetails.email,
+                subject: `Invoice ${invoice.invoiceNumber} - ${invoice.hotelDetails.name}`,
+                html: invoiceEmailTemplate(invoice),
+                attachments: [
+                    {
+                        filename: `Invoice-${invoice.invoiceNumber}.pdf`,
+                        content: pdfBuffer,
+                        contentType: "application/pdf",
+                    },
+                ],
+            };
 
-        try {
-            await transporter.sendMail(mailOptions);
+            try {
+                await transporter.sendMail(mailOptions);
 
-            // Update invoice to mark email as sent
-            invoice.emailSent = true;
-            invoice.emailSentAt = new Date();
-            await invoice.save();
-
-            return invoice.toJSON();
-        } catch (error) {
-            console.error("Error sending invoice email:", error);
-            throw new Error("Failed to send invoice email: " + error.message);
+                // Update invoice to mark email as sent
+                invoice.emailSent = true;
+                invoice.emailSentAt = new Date();
+                await invoice.save();
+            } catch (error) {
+                console.error("Error sending invoice email:", error);
+                // Don't throw error - invoice is still valid even if email fails
+                console.log("Invoice generated successfully but email could not be sent");
+            }
+        } else {
+            console.log(`Invoice ${invoice.invoiceNumber} generated for walk-in customer without email`);
         }
+
+        return invoice.toJSON();
     }
 
     /**
      * Download invoice PDF
      * @param {string} invoiceId - Invoice ID
      * @param {Object} currentUser - Current user
-     * @returns {Buffer} PDF buffer
+     * @returns {Object} Object containing pdfBuffer and invoice
      */
     async downloadInvoicePDF(invoiceId, currentUser) {
         if (!mongoose.Types.ObjectId.isValid(invoiceId)) {
@@ -296,12 +328,20 @@ class InvoiceService {
             if (invoice.guest && invoice.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only download your own invoices");
             }
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only download invoices for their hotel's bookings
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only download invoices for bookings from your assigned hotel");
+            }
         }
 
         // Generate PDF
         const pdfBuffer = await generateInvoicePDF(invoice);
 
-        return pdfBuffer;
+        return { pdfBuffer, invoice };
     }
 
     /**
@@ -351,6 +391,16 @@ class InvoiceService {
             throw new Error("Invoice not found");
         }
 
+        // Authorization check - Receptionist can only update payment status for their hotel's bookings
+        if (currentUser.role === "receptionist") {
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only update payment status for invoices from your assigned hotel");
+            }
+        }
+
         // Update payment status
         if (paymentData.paymentStatus) {
             invoice.paymentStatus = paymentData.paymentStatus;
@@ -376,9 +426,21 @@ class InvoiceService {
 
         const query = {};
 
+        // Receptionist can only view invoices for their hotel
+        if (currentUser.role === "receptionist") {
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            query.hotelId = currentUser.hotelId;
+        }
+
         // Apply filters
         if (filters.hotelId) {
-            query.hotelId = filters.hotelId;
+            // For receptionist, this filter is ignored (already filtered by their hotel above)
+            // For admin, apply the hotel filter
+            if (currentUser.role === "admin") {
+                query.hotelId = filters.hotelId;
+            }
         }
         if (filters.paymentStatus) {
             query.paymentStatus = filters.paymentStatus;

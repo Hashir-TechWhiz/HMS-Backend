@@ -91,13 +91,22 @@ export async function generateInvoicePDF(invoice) {
                 .text(invoice.guestDetails.name, 50, currentY);
 
             currentY += 18;
-            doc.fontSize(9)
-                .fillColor(lightGray)
-                .text(`Email: ${invoice.guestDetails.email}`, 50, currentY);
+            if (invoice.guestDetails.email) {
+                doc.fontSize(9)
+                    .fillColor(lightGray)
+                    .text(`Email: ${invoice.guestDetails.email}`, 50, currentY);
+                currentY += 15;
+            }
 
             if (invoice.guestDetails.phone) {
+                if (!invoice.guestDetails.email) {
+                    // If no email, start from the position after name
+                    currentY += 0;
+                }
+                doc.fontSize(9)
+                    .fillColor(lightGray)
+                    .text(`Phone: ${invoice.guestDetails.phone}`, 50, currentY);
                 currentY += 15;
-                doc.text(`Phone: ${invoice.guestDetails.phone}`, 50, currentY);
             }
 
             // Stay Information Section (Right side)

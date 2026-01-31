@@ -251,7 +251,7 @@ export function invoiceEmailTemplate(invoice) {
                     <div class="section">
                         <div class="section-title">Bill To</div>
                         <p style="margin: 5px 0; font-size: 16px; font-weight: 600; color: #2c3e50;">${invoice.guestDetails.name}</p>
-                        <p style="margin: 3px 0; color: #666;">📧 ${invoice.guestDetails.email}</p>
+                        ${invoice.guestDetails.email ? `<p style="margin: 3px 0; color: #666;">📧 ${invoice.guestDetails.email}</p>` : ""}
                         ${invoice.guestDetails.phone ? `<p style="margin: 3px 0; color: #666;">📞 ${invoice.guestDetails.phone}</p>` : ""}
                     </div>
 

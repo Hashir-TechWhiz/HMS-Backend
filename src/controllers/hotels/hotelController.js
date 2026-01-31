@@ -52,7 +52,12 @@ class HotelController {
 
     /**
      * Get active hotels (for selection/dropdown)
-     * GET /api/hotels/active
+     * GET /api/hotels/active (authenticated)
+     * GET /api/hotels/public/active (public - no auth required)
+     * 
+     * Note: This endpoint is safe for public access as it only returns
+     * basic hotel information (name, city, country) for active hotels.
+     * No sensitive data is exposed.
      */
     async getActiveHotels(req, res, next) {
         try {

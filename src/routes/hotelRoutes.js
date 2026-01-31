@@ -7,7 +7,21 @@ import authorize from "../middleware/authorize.js";
 const router = express.Router();
 
 /**
- * All hotel routes require authentication and admin role
+ * PUBLIC ROUTES (no authentication required)
+ */
+
+/**
+ * @route   GET /api/hotels/public/active
+ * @desc    Get all active hotels for public browsing (cities/destinations)
+ * @access  Public
+ */
+router.get(
+    "/public/active",
+    hotelController.getActiveHotels
+);
+
+/**
+ * AUTHENTICATED ROUTES
  */
 
 /**
