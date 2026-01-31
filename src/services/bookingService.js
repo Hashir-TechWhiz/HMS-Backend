@@ -214,6 +214,12 @@ class BookingService {
         // CRITICAL: Guest bookings (with finalGuestId) MUST remain pending until staff explicitly confirms
         // This applies whether created by guest themselves OR by staff on behalf of guest
 
+        // Calculate total amount based on room price and dates
+        const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+        const roomCharges = nights * room.pricePerNight;
+        const serviceCharges = 0; // No service charges at booking time
+        const totalAmount = roomCharges + serviceCharges;
+
         // Create new booking with hotelId from room
         const bookingPayload = {
             hotelId: room.hotelId, // Automatically get hotelId from the room
@@ -222,6 +228,11 @@ class BookingService {
             checkInDate: checkIn,
             checkOutDate: checkOut,
             status: bookingStatus,
+            roomCharges, // Store room charges separately
+            serviceCharges, // Store service charges separately
+            totalAmount, // Store calculated total amount
+            paymentStatus: "unpaid", // Default payment status
+            totalPaid: 0, // Default total paid
         };
 
         // Only include customerDetails if it's not null
@@ -232,6 +243,30 @@ class BookingService {
         // Only include createdBy if it's not null
         if (finalCreatedBy) {
             bookingPayload.createdBy = finalCreatedBy;
+        }
+
+        // Handle optional payment during booking creation
+        const { paymentData } = bookingData;
+        if (paymentData && paymentData.amount > 0) {
+            // Payment provided during booking creation
+            const payment = {
+                amount: paymentData.amount,
+                paymentMethod: paymentData.paymentMethod || "card",
+                paymentDate: new Date(),
+                processedBy: currentUser.id,
+                transactionId: paymentData.transactionId || null,
+                notes: paymentData.notes || "Payment made during booking",
+            };
+
+            bookingPayload.payments = [payment];
+            bookingPayload.totalPaid = paymentData.amount;
+
+            // Update payment status based on amount paid
+            if (paymentData.amount >= totalAmount) {
+                bookingPayload.paymentStatus = "paid";
+            } else {
+                bookingPayload.paymentStatus = "partially_paid";
+            }
         }
 
         const newBooking = new Booking(bookingPayload);
@@ -865,6 +900,57 @@ class BookingService {
         // Check if booking is in the correct status (must be checkedin)
         if (booking.status !== "checkedin" || !booking.isCheckedIn) {
             throw new Error("Booking must be checked-in before check-out");
+        }
+
+        // IMPORTANT: Calculate and validate payment before checkout
+        // Get all completed service requests to ensure amounts are up-to-date
+        const ServiceRequest = mongoose.model("ServiceRequest");
+        const completedServices = await ServiceRequest.find({
+            booking: bookingId,
+            status: "completed"
+        });
+
+        // Calculate total service charges
+        const totalServiceCharges = completedServices.reduce((sum, sr) => {
+            const price = sr.finalPrice || sr.fixedPrice || 0;
+            return sum + price;
+        }, 0);
+
+        // Calculate room charges if not set
+        if (!booking.roomCharges) {
+            const checkIn = new Date(booking.checkInDate);
+            const checkOut = new Date(booking.checkOutDate);
+            const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+            const room = await mongoose.model("Room").findById(booking.room);
+            booking.roomCharges = nights * (room?.pricePerNight || 0);
+        }
+
+        // Update booking amounts if they've changed
+        const calculatedTotal = (booking.roomCharges || 0) + totalServiceCharges;
+        if (booking.serviceCharges !== totalServiceCharges || booking.totalAmount !== calculatedTotal) {
+            booking.serviceCharges = totalServiceCharges;
+            booking.totalAmount = calculatedTotal;
+            
+            // Update payment status
+            const totalPaid = booking.totalPaid || 0;
+            if (totalPaid === 0) {
+                booking.paymentStatus = "unpaid";
+            } else if (totalPaid >= booking.totalAmount) {
+                booking.paymentStatus = "paid";
+            } else {
+                booking.paymentStatus = "partially_paid";
+            }
+            
+            await booking.save();
+        }
+
+        // Check if payment is complete
+        const balance = booking.totalAmount - (booking.totalPaid || 0);
+        if (balance > 0) {
+            throw new Error(
+                `Cannot check-out with outstanding balance. Please pay the remaining LKR ${balance.toLocaleString()} before checkout. ` +
+                `Total: LKR ${booking.totalAmount.toLocaleString()}, Paid: LKR ${(booking.totalPaid || 0).toLocaleString()}, Balance: LKR ${balance.toLocaleString()}`
+            );
         }
 
         // Populate booking details for invoice generation (BEFORE marking as completed)

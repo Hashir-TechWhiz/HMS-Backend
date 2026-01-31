@@ -1,5 +1,6 @@
 import express from "express";
 import bookingController from "../controllers/bookings/bookingController.js";
+import { recalculateBookingAmounts } from "../controllers/bookings/recalculateBookingController.js";
 import authenticate from "../middleware/authenticate.js";
 import authorize from "../middleware/authorize.js";
 
@@ -115,13 +116,25 @@ router.patch(
 /**
  * @route   PATCH /api/bookings/:id/check-out
  * @desc    Check-out a booking (manual action by staff)
- * @access  Private (Receptionist, Admin)
+ * @access  Private (Receptionist, Admin, Guest)
  */
 router.patch(
     "/:id/check-out",
     authenticate,
-    authorize("receptionist", "admin"),
+    authorize("guest", "receptionist", "admin"),
     bookingController.checkOutBooking
+);
+
+/**
+ * @route   POST /api/bookings/:id/recalculate
+ * @desc    Recalculate booking amounts (fix incorrect totals)
+ * @access  Private (Receptionist, Admin)
+ */
+router.post(
+    "/:id/recalculate",
+    authenticate,
+    authorize("receptionist", "admin"),
+    recalculateBookingAmounts
 );
 
 export default router;

@@ -98,12 +98,16 @@ class InvoiceService {
         const serviceChargesTotal = serviceCharges.reduce((sum, sc) => sum + sc.total, 0);
 
         // Calculate summary
+        const subtotal = roomCharges.subtotal + serviceChargesTotal;
+        const taxRate = 0; // Can be configured as needed
+        const taxAmount = subtotal * taxRate;
+        
         const summary = {
             roomChargesTotal: roomCharges.subtotal,
             serviceChargesTotal: serviceChargesTotal,
-            subtotal: roomCharges.subtotal + serviceChargesTotal,
-            tax: 0, // Tax can be added later if needed
-            grandTotal: roomCharges.subtotal + serviceChargesTotal,
+            subtotal: subtotal,
+            tax: taxAmount,
+            grandTotal: subtotal + taxAmount,
         };
 
         // Prepare guest details
@@ -146,6 +150,11 @@ class InvoiceService {
         // Generate unique invoice number
         const invoiceNumber = await Invoice.generateInvoiceNumber();
 
+        // Determine payment status based on booking payment status
+        const paymentStatus = booking.paymentStatus === "paid" ? "paid" :
+                             booking.paymentStatus === "partially_paid" ? "partially_paid" :
+                             "pending";
+
         // Create invoice
         const invoice = new Invoice({
             invoiceNumber,
@@ -158,8 +167,9 @@ class InvoiceService {
             roomCharges,
             serviceCharges,
             summary,
-            paymentStatus: "paid",
+            paymentStatus: paymentStatus,
             generatedBy: currentUser?.id || null,
+            notes: `Invoice generated for booking ${bookingId}. Room charges: ${roomCharges.subtotal}, Service charges: ${serviceChargesTotal}, Total: ${summary.grandTotal}`,
         });
 
         await invoice.save();
