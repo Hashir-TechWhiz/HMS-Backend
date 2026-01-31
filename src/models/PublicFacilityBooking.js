@@ -334,7 +334,7 @@ publicFacilityBookingSchema.pre("save", async function () {
             _id: { $ne: this._id }, // Exclude current booking
             hotelId: this.hotelId, // Check only within the same hotel
             facility: this.facility,
-            status: { $ne: "cancelled" }, // Only check non-cancelled bookings
+            status: { $nin: ["cancelled", "completed"] }, // Exclude cancelled and completed bookings
             $or: overlapConditions,
         });
 

@@ -127,7 +127,7 @@ class PublicFacilityBookingService {
 
         const query = {
             facility: facilityId,
-            status: { $ne: "cancelled" },
+            status: { $nin: ["cancelled", "completed"] }, // Exclude cancelled and completed bookings
             $or: overlapConditions,
         };
 

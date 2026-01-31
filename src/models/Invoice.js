@@ -31,7 +31,7 @@ const invoiceSchema = new mongoose.Schema(
             },
             email: {
                 type: String,
-                required: [true, "Guest email is required"],
+                required: false, // Email is optional for walk-in customers
                 trim: true,
                 lowercase: true,
             },

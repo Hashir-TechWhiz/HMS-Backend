@@ -258,7 +258,7 @@ bookingSchema.pre("save", async function () {
             _id: { $ne: this._id }, // Exclude current booking
             hotelId: this.hotelId, // Check only within the same hotel
             room: this.room,
-            status: { $ne: "cancelled" }, // Only check non-cancelled bookings
+            status: { $nin: ["cancelled", "completed"] }, // Exclude cancelled and completed bookings
             $or: [
                 // New booking starts during an existing booking
                 {

@@ -69,7 +69,7 @@ class BookingService {
     async hasOverlappingBooking(roomId, checkInDate, checkOutDate, excludeBookingId = null) {
         const query = {
             room: roomId,
-            status: { $ne: "cancelled" }, // Only check non-cancelled bookings
+            status: { $nin: ["cancelled", "completed"] }, // Exclude cancelled and completed bookings
             $or: [
                 // New booking starts during an existing booking
                 {
