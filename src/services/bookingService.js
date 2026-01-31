@@ -421,6 +421,7 @@ class BookingService {
 
         // Get paginated bookings
         const bookings = await Booking.find(query)
+            .populate("hotelId", "name city country address code")
             .populate("guest", "name email role")
             .populate("createdBy", "name email role")
             .populate("room", "roomNumber roomType pricePerNight images")
@@ -455,6 +456,7 @@ class BookingService {
         }
 
         const booking = await Booking.findById(bookingId)
+            .populate("hotelId", "name city country address code")
             .populate("guest", "name email role")
             .populate("createdBy", "name email role")
             .populate("room", "roomNumber roomType pricePerNight images");
@@ -477,7 +479,7 @@ class BookingService {
             if (!currentUser.hotelId) {
                 throw new Error("Receptionist must be assigned to a hotel");
             }
-            if (booking.hotelId.toString() !== currentUser.hotelId.toString()) {
+            if (booking.hotelId._id.toString() !== currentUser.hotelId.toString()) {
                 throw new Error("Access denied. You can only view bookings from your assigned hotel");
             }
         } else if (currentUser.role !== "admin") {
@@ -659,6 +661,7 @@ class BookingService {
 
         // Get paginated bookings
         const bookings = await Booking.find(query)
+            .populate("hotelId", "name city country address code")
             .populate("room", "roomNumber roomType pricePerNight images")
             .sort({ createdAt: -1 })
             .skip(skip)

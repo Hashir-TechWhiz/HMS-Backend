@@ -38,6 +38,16 @@ class InvoiceService {
             throw new Error("Booking not found");
         }
 
+        // Authorization check - Receptionist can only generate invoices for their hotel's bookings
+        if (currentUser.role === "receptionist") {
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (booking.hotelId._id.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only generate invoices for bookings from your assigned hotel");
+            }
+        }
+
         // Check if booking is checked-in (Option A: Invoice generated DURING checkout, not after)
         if (booking.status !== "checkedin") {
             if (booking.status === "completed") {
@@ -199,6 +209,14 @@ class InvoiceService {
             if (invoice.guest && invoice.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view your own invoices");
             }
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only view invoices for their hotel's bookings
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view invoices for bookings from your assigned hotel");
+            }
         }
 
         return invoice.toJSON();
@@ -221,6 +239,14 @@ class InvoiceService {
         if (currentUser.role === "guest") {
             if (invoice.guest && invoice.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only view your own invoices");
+            }
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only view invoices for their hotel's bookings
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only view invoices for bookings from your assigned hotel");
             }
         }
 
@@ -296,6 +322,14 @@ class InvoiceService {
             if (invoice.guest && invoice.guest.toString() !== currentUser.id) {
                 throw new Error("Access denied. You can only download your own invoices");
             }
+        } else if (currentUser.role === "receptionist") {
+            // Receptionist can only download invoices for their hotel's bookings
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only download invoices for bookings from your assigned hotel");
+            }
         }
 
         // Generate PDF
@@ -351,6 +385,16 @@ class InvoiceService {
             throw new Error("Invoice not found");
         }
 
+        // Authorization check - Receptionist can only update payment status for their hotel's bookings
+        if (currentUser.role === "receptionist") {
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            if (invoice.hotelId.toString() !== currentUser.hotelId.toString()) {
+                throw new Error("Access denied. You can only update payment status for invoices from your assigned hotel");
+            }
+        }
+
         // Update payment status
         if (paymentData.paymentStatus) {
             invoice.paymentStatus = paymentData.paymentStatus;
@@ -376,9 +420,21 @@ class InvoiceService {
 
         const query = {};
 
+        // Receptionist can only view invoices for their hotel
+        if (currentUser.role === "receptionist") {
+            if (!currentUser.hotelId) {
+                throw new Error("Receptionist must be assigned to a hotel");
+            }
+            query.hotelId = currentUser.hotelId;
+        }
+
         // Apply filters
         if (filters.hotelId) {
-            query.hotelId = filters.hotelId;
+            // For receptionist, this filter is ignored (already filtered by their hotel above)
+            // For admin, apply the hotel filter
+            if (currentUser.role === "admin") {
+                query.hotelId = filters.hotelId;
+            }
         }
         if (filters.paymentStatus) {
             query.paymentStatus = filters.paymentStatus;
